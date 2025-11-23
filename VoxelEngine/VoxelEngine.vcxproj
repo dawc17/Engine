@@ -71,7 +71,7 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>C:\lib\glm-1.0.2;C:\lib\GLAD\include;C:\lib\GLFW\include;$(IncludePath)</IncludePath>
+    <IncludePath>C:\lib\imgui;C:\lib\glm-1.0.2;C:\lib\GLAD\include;C:\lib\GLFW\include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <IncludePath>C:\lib\glm-1.0.2;C:\lib\GLAD\include;C:\lib\GLFW\include;$(IncludePath)</IncludePath>
@@ -138,10 +138,28 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="C:\lib\GLAD\src\glad.c" />
+    <ClCompile Include="C:\lib\imgui\imgui.cpp" />
+    <ClCompile Include="C:\lib\imgui\imgui_demo.cpp" />
+    <ClCompile Include="C:\lib\imgui\imgui_draw.cpp" />
+    <ClCompile Include="C:\lib\imgui\imgui_impl_glfw.cpp" />
+    <ClCompile Include="C:\lib\imgui\imgui_impl_opengl3.cpp" />
+    <ClCompile Include="C:\lib\imgui\imgui_tables.cpp" />
+    <ClCompile Include="C:\lib\imgui\imgui_widgets.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="shader.vert" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="C:\lib\imgui\imconfig.h" />
+    <ClInclude Include="C:\lib\imgui\imgui.h" />
+    <ClInclude Include="C:\lib\imgui\imgui_impl_glfw.h" />
+    <ClInclude Include="C:\lib\imgui\imgui_impl_opengl3.h" />
+    <ClInclude Include="C:\lib\imgui\imgui_impl_opengl3_loader.h" />
+    <ClInclude Include="C:\lib\imgui\imgui_internal.h" />
+    <ClInclude Include="C:\lib\imgui\imstb_rectpack.h" />
+    <ClInclude Include="C:\lib\imgui\imstb_textedit.h" />
+    <ClInclude Include="C:\lib\imgui\imstb_truetype.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
