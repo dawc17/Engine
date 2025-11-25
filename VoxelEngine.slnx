@@ -1,7 +1,0 @@
-<Solution>
-  <Configurations>
-    <Platform Name="x64" />
-    <Platform Name="x86" />
-  </Configurations>
-  <Project Path="VoxelEngine/VoxelEngine.vcxproj" Id="90ad7567-f55c-44ad-8c11-77849fc5315b" />
-</Solution>

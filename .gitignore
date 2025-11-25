@@ -41,3 +41,22 @@
 *.dwo
 /VoxelEngine/x64/Debug
 /.vs
+
+# Ignore build directories
+/build/
+/out/
+/bin/
+/obj/
+
+# Ignore VS generated files
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.user
+
+# CMake garbage
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
