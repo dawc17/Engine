@@ -37,7 +37,6 @@ target_include_directories(imgui PUBLIC
 # === Include dirs for your executable ===
 target_include_directories(VoxelEngine PUBLIC
     ../libs/glad/include
-    ../libs/glm
     ${IMGUI_DIR}
     ${IMGUI_DIR}/backends
 )
@@ -77,6 +76,8 @@ else()
         message(FATAL_ERROR "Could not find a GLFW target from find_package(glfw3)")
     endif()
 endif()
+
+target_link_libraries(VoxelEngine PRIVATE glm::glm)
 
 if (WIN32)
     target_link_libraries(VoxelEngine PRIVATE glad ${GLFW_TARGET} imgui opengl32)
