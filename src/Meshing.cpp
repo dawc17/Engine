@@ -32,7 +32,9 @@ void buildChunkMesh(Chunk &c)
   };
 
   std::vector<Vertex> verts;
+  verts.reserve(CHUNK_VOLUME * 6 * 4); // worst case: six quads per block, four verts per quad
   std::vector<uint32_t> inds;
+  inds.reserve(CHUNK_VOLUME * 6 * 6); // six indices per quad
 
   // Greedy meshing
   for (int dir = 0; dir < 6; dir++)

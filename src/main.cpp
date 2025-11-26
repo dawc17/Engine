@@ -74,6 +74,7 @@ int main()
     Shader shaderProgram("default.vert", "default.frag");
     shaderProgram.Activate();
     glUniform1i(glGetUniformLocation(shaderProgram.ID, "textureArray"), 0);
+    GLint transformLoc = glGetUniformLocation(shaderProgram.ID, "transform");
 
     stbi_set_flip_vertically_on_load(false);
 
@@ -234,6 +235,10 @@ int main()
       ImGui_ImplGlfw_NewFrame();
       ImGui::NewFrame();
 
+      glfwGetFramebufferSize(window, &fbWidth, &fbHeight);
+      if (fbHeight == 0)
+        fbHeight = 1;
+
       glm::mat4 model = glm::mat4(1.0f);
 
       glm::vec3 camForward = CameraForward(cam);
@@ -246,8 +251,6 @@ int main()
       glm::mat4 proj = glm::perspective(glm::radians(cam.fov), aspect, 0.1f, 1000.f);
 
       glm::mat4 mvp = proj * view * model;
-      unsigned int transformLoc =
-          glGetUniformLocation(shaderProgram.ID, "transform");
       glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(mvp));
 
       int cx = floor(cam.position.x / CHUNK_SIZE);
@@ -273,10 +276,10 @@ int main()
       }
 
       // unload chunks outside unload radius
-      std::vector<std::tuple<int, int, int>> toUnload;
+      std::vector<ChunkManager::ChunkCoord> toUnload;
       for (auto &pair : chunkManager.chunks)
       {
-        Chunk *chunk = pair.second;
+        Chunk *chunk = pair.second.get();
         int distX = chunk->position.x - cx;
         int distZ = chunk->position.z - cz;
         if (std::abs(distX) > UNLOAD_RADIUS || std::abs(distZ) > UNLOAD_RADIUS)
@@ -284,15 +287,15 @@ int main()
           toUnload.push_back({chunk->position.x, chunk->position.y, chunk->position.z});
         }
       }
-      for (auto &[ux, uy, uz] : toUnload)
+      for (const auto &coord : toUnload)
       {
-        chunkManager.unloadChunk(ux, uy, uz);
+        chunkManager.unloadChunk(coord.x, coord.y, coord.z);
       }
 
       // render chunks
       for (auto &pair : chunkManager.chunks)
       {
-        Chunk *chunk = pair.second;
+        Chunk *chunk = pair.second.get();
         if (chunk->dirtyMesh)
         {
           buildChunkMesh(*chunk);
@@ -331,6 +334,9 @@ int main()
       glfwSwapBuffers(window);
       glfwPollEvents();
     }
+
+    // Release GPU resources for chunks before the OpenGL context is torn down.
+    chunkManager.chunks.clear();
     ImGui_ImplGlfw_Shutdown();
     ImGui_ImplOpenGL3_Shutdown();
     ImGui::DestroyContext();

@@ -9,11 +9,14 @@ constexpr int CHUNK_VOLUME = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
 
 struct Chunk
 {
+  Chunk();
+  ~Chunk();
+
   glm::ivec3 position;
   BlockID blocks[CHUNK_VOLUME];
 
   bool dirtyMesh = true;
-  GLuint vao, vbo, ebo;
+  GLuint vao = 0, vbo = 0, ebo = 0;
   uint32_t indexCount = 0;
   uint32_t vertexCount = 0;
 };
