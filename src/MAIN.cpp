@@ -28,7 +28,7 @@ struct Camera
   float fov;
 };
 
-glm::vec3 CameraForward(const Camera& camera)
+glm::vec3 CameraForward(const Camera &camera)
 {
   glm::vec3 forward;
   forward.x = cos(glm::radians(camera.yaw)) * cos(glm::radians(camera.pitch));
@@ -38,14 +38,22 @@ glm::vec3 CameraForward(const Camera& camera)
 }
 
 void framebuffer_size_callback(GLFWwindow *window, int width, int height);
-void processInput(GLFWwindow *window, Camera& camera, float dt);
+void processInput(GLFWwindow *window, Camera &camera, float dt);
 std::string resolveTexturePath(const std::string &relativePath);
 
 const int SCREEN_WIDTH = 1280;
 const int SCREEN_HEIGHT = 720;
 
+float fps = 0.0f;
+float cameraSpeed = 2.5f;
+
+bool mouseLocked = true;
+bool firstMouse = true;
+double lastMouseX = SCREEN_WIDTH / 2.0;
+double lastMouseY = SCREEN_HEIGHT / 2.0;
+
 float vertices[] = {
-    // coords             // colors           // textures
+    // coords 3            // colors 3    // textures 2
     -0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, // lower left
     0.5f, 0.5f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f, 1.0f,   // upper right
     -0.5f, 0.5f, 0.0f, 1.0f, 1.0f, 0.0f, 0.0f, 1.0f,  // upper left
@@ -75,6 +83,7 @@ int main()
       return 1;
     }
     glfwMakeContextCurrent(window);
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
     gladLoadGL();
 
@@ -170,6 +179,40 @@ int main()
     {
       float currentFrame = glfwGetTime();
       float deltaTime = currentFrame - lastFrame;
+      lastFrame = currentFrame;
+
+      double mouseX, mouseY;
+      glfwGetCursorPos(window, &mouseX, &mouseY);
+
+      if (firstMouse)
+      {
+        lastMouseX = mouseX;
+        lastMouseY = mouseY;
+        firstMouse = false;
+      }
+
+      float xoffset = static_cast<float>(mouseX - lastMouseX);
+      float yoffset = static_cast<float>(lastMouseY - mouseY);
+      lastMouseX = mouseX;
+      lastMouseY = mouseY;
+
+      float sensitivity = 0.1f;
+      xoffset *= sensitivity;
+      yoffset *= sensitivity;
+
+      if (mouseLocked)
+      {
+        cam.yaw += xoffset;
+        cam.pitch += yoffset;
+      }
+
+      if (cam.pitch > 89.0f)
+        cam.pitch = 89.0f;
+      if (cam.pitch < -89.0f)
+        cam.pitch = -89.0f;
+
+      fps = 1.0f / deltaTime;
+
       processInput(window, cam, deltaTime);
 
       glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
@@ -189,20 +232,37 @@ int main()
       ImGui_ImplGlfw_NewFrame();
       ImGui::NewFrame();
 
-      glm::mat4 trans = glm::mat4(1.0f);
-      trans = glm::translate(trans, glm::vec3(0.5f, -0.5f, 0.0f));
-      trans =
-          glm::rotate(trans, (float)glfwGetTime(), glm::vec3(0.0f, 0.0f, 1.0f));
+      glm::mat4 model = glm::mat4(1.0f);
 
+      glm::vec3 camForward = CameraForward(cam);
+      glm::mat4 view = glm::lookAt(
+          cam.position,
+          cam.position + camForward,
+          glm::vec3(0.0f, 1.0f, 0.0f));
+
+      float aspect = static_cast<float>(fbWidth) / static_cast<float>(fbHeight);
+      glm::mat4 proj = glm::perspective(glm::radians(cam.fov), aspect, 0.1f, 1000.f);
+
+      glm::mat4 mvp = proj * view * model;
       unsigned int transformLoc =
           glGetUniformLocation(shaderProgram.ID, "transform");
-      glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(trans));
+      glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(mvp));
 
       glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
-      ImGui::Begin("cool menu for stuff and shit");
-      ImGui::Text("Hello");
+      ImGui::Begin("Debug");
+      ImGui::Text("FPS: %.1f", fps);
+      ImGui::Text("Camera pos: (%.2f, %.2f, %.2f)",
+                  cam.position.x, cam.position.y, cam.position.z);
+      ImGui::Text("Yaw: %.1f, Pitch: %.1f", cam.yaw, cam.pitch);
+
+      int chunkX = static_cast<int>(floor(cam.position.x / 16.0f));
+      int chunkZ = static_cast<int>(floor(cam.position.z / 16.0f));
+      ImGui::Text("Chunk: (%d, %d)", chunkX, chunkZ);
+
       ImGui::Checkbox("Wireframe mode", &wireframeMode);
+      ImGui::SliderFloat("Camera Speed", &cameraSpeed, 0.0f, 10.0f);
+
       ImGui::End();
 
       ImGui::Render();
@@ -236,25 +296,47 @@ void framebuffer_size_callback(GLFWwindow *window, int width, int height)
   glViewport(0, 0, width, height);
 }
 
-void processInput(GLFWwindow *window, Camera& camera, float dt)
+void processInput(GLFWwindow *window, Camera &camera, float dt)
 {
   if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
     glfwSetWindowShouldClose(window, true);
 
-  float speed = 5.0f * dt;
+  static bool uKeyPressed = false;
+  if (glfwGetKey(window, GLFW_KEY_U) == GLFW_PRESS)
+  {
+    if (!uKeyPressed)
+    {
+      mouseLocked = !mouseLocked;
+      if (mouseLocked)
+      {
+        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+        firstMouse = true;
+      }
+      else
+      {
+        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+      }
+      uKeyPressed = true;
+    }
+  }
+  else
+  {
+    uKeyPressed = false;
+  }
+
+  float speed = cameraSpeed * dt;
 
   glm::vec3 forward = CameraForward(camera);
   glm::vec3 right = glm::normalize(glm::cross(forward, glm::vec3(0.0f, 1.0f, 0.0f)));
 
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-        camera.position += forward * speed;
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-        camera.position -= forward * speed;
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-        camera.position -= right * speed;
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-        camera.position += right * speed;
-
+  if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+    camera.position += forward * speed;
+  if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+    camera.position -= forward * speed;
+  if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+    camera.position -= right * speed;
+  if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+    camera.position += right * speed;
 }
 
 std::string resolveTexturePath(const std::string &relativePath)
