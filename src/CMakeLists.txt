@@ -10,6 +10,7 @@ set(SOURCES
     ChunkManager.cpp
     Meshing.cpp
     BlockTypes.cpp
+    Raycast.cpp
 )
 
 # === Create the executable FIRST ===

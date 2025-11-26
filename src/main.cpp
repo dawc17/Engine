@@ -7,6 +7,7 @@
 #include "ChunkManager.h"
 #include "Meshing.h"
 #include "BlockTypes.h"
+#include "Raycast.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -27,10 +28,12 @@
 
 void framebuffer_size_callback(GLFWwindow *window, int width, int height);
 void processInput(GLFWwindow *window, Camera &camera, float dt);
+void mouseButtonCallback(GLFWwindow *window, int button, int action, int mods);
 std::string resolveTexturePath(const std::string &relativePath);
 
 const int SCREEN_WIDTH = 1280;
 const int SCREEN_HEIGHT = 720;
+const float MAX_RAYCAST_DISTANCE = 8.0f;
 
 float fps = 0.0f;
 float cameraSpeed = 2.5f;
@@ -39,6 +42,10 @@ bool mouseLocked = true;
 bool firstMouse = true;
 double lastMouseX = SCREEN_WIDTH / 2.0;
 double lastMouseY = SCREEN_HEIGHT / 2.0;
+
+// Global pointers for mouse callback
+Camera* g_camera = nullptr;
+ChunkManager* g_chunkManager = nullptr;
 
 int main()
 {
@@ -159,11 +166,52 @@ int main()
     // Initialize block type registry
     initBlockTypes();
 
+    // Selection highlight shader and geometry
+    Shader selectionShader("selection.vert", "selection.frag");
+    GLint selectionTransformLoc = glGetUniformLocation(selectionShader.ID, "transform");
+    GLint selectionColorLoc = glGetUniformLocation(selectionShader.ID, "color");
+
+    // Wireframe cube vertices (slightly larger than 1x1x1 to avoid z-fighting)
+    const float s = 1.002f;  // Slight scale to avoid z-fighting
+    const float o = -0.001f; // Offset
+    float cubeVertices[] = {
+        // Front face
+        o, o, s+o,  s+o, o, s+o,  s+o, s+o, s+o,  o, s+o, s+o,
+        // Back face  
+        o, o, o,  s+o, o, o,  s+o, s+o, o,  o, s+o, o,
+    };
+    unsigned int cubeIndices[] = {
+        // Front face lines
+        0, 1, 1, 2, 2, 3, 3, 0,
+        // Back face lines
+        4, 5, 5, 6, 6, 7, 7, 4,
+        // Connecting lines
+        0, 4, 1, 5, 2, 6, 3, 7
+    };
+
+    GLuint selectionVAO, selectionVBO, selectionEBO;
+    glGenVertexArrays(1, &selectionVAO);
+    glGenBuffers(1, &selectionVBO);
+    glGenBuffers(1, &selectionEBO);
+
+    glBindVertexArray(selectionVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, selectionVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(cubeVertices), cubeVertices, GL_STATIC_DRAW);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, selectionEBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(cubeIndices), cubeIndices, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    glBindVertexArray(0);
+
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO &io = ImGui::GetIO();
     (void)io;
     ImGui::StyleColorsDark();
+    
+    // Set our mouse callback BEFORE ImGui init so ImGui can chain to it
+    glfwSetMouseButtonCallback(window, mouseButtonCallback);
+    
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 460");
 
@@ -178,6 +226,13 @@ int main()
     float lastFrame = 0.0f;
 
     ChunkManager chunkManager;
+
+    // Set up global pointers for mouse callback
+    g_camera = &cam;
+    g_chunkManager = &chunkManager;
+
+    // Track selected block
+    std::optional<RaycastHit> selectedBlock;
 
     // main draw loop sigma
     while (!glfwWindowShouldClose(window))
@@ -313,6 +368,38 @@ int main()
         }
       }
 
+      // Raycast for block selection
+      selectedBlock = raycastVoxel(cam.position, camForward, MAX_RAYCAST_DISTANCE, chunkManager);
+
+      // Render selection highlight
+      if (selectedBlock.has_value())
+      {
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        glLineWidth(2.0f);
+        // Use polygon offset to push lines slightly forward, avoiding z-fighting
+        glEnable(GL_POLYGON_OFFSET_LINE);
+        glPolygonOffset(-1.0f, -1.0f);
+
+        selectionShader.Activate();
+        glm::mat4 selectionModel = glm::translate(glm::mat4(1.0f), 
+            glm::vec3(selectedBlock->blockPos));
+        glm::mat4 selectionMVP = proj * view * selectionModel;
+        glUniformMatrix4fv(selectionTransformLoc, 1, GL_FALSE, glm::value_ptr(selectionMVP));
+        glUniform4f(selectionColorLoc, 0.0f, 0.0f, 0.0f, 1.0f);  // Black outline
+
+        glBindVertexArray(selectionVAO);
+        glDrawElements(GL_LINES, 24, GL_UNSIGNED_INT, 0);
+
+        glDisable(GL_POLYGON_OFFSET_LINE);
+        glLineWidth(1.0f);
+        
+        // Restore polygon mode
+        if (wireframeMode)
+          glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        else
+          glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+      }
+
       ImGui::Begin("Debug");
       ImGui::Text("FPS: %.1f", fps);
       ImGui::Text("Camera pos: (%.2f, %.2f, %.2f)",
@@ -323,10 +410,53 @@ int main()
       int chunkZ = static_cast<int>(floor(cam.position.z / 16.0f));
       ImGui::Text("Chunk: (%d, %d)", chunkX, chunkZ);
 
+      if (selectedBlock.has_value())
+      {
+        ImGui::Separator();
+        ImGui::Text("Selected Block: (%d, %d, %d)", 
+            selectedBlock->blockPos.x, 
+            selectedBlock->blockPos.y, 
+            selectedBlock->blockPos.z);
+        uint8_t blockId = getBlockAtWorld(
+            selectedBlock->blockPos.x, 
+            selectedBlock->blockPos.y, 
+            selectedBlock->blockPos.z, 
+            chunkManager);
+        ImGui::Text("Block ID: %d", blockId);
+        ImGui::Text("Distance: %.2f", selectedBlock->distance);
+      }
+      else
+      {
+        ImGui::Separator();
+        ImGui::Text("No block selected");
+      }
+
+      ImGui::Separator();
+      ImGui::Text("LMB: Break block");
+      ImGui::Text("RMB: Place block");
+
       ImGui::Checkbox("Wireframe mode", &wireframeMode);
       ImGui::SliderFloat("Camera Speed", &cameraSpeed, 0.0f, 10.0f);
 
       ImGui::End();
+
+      // Draw crosshair in the center of the screen
+      ImDrawList* drawList = ImGui::GetForegroundDrawList();
+      ImVec2 center(fbWidth * 0.5f, fbHeight * 0.5f);
+      float crosshairSize = 10.0f;
+      float crosshairThickness = 2.0f;
+      ImU32 crosshairColor = IM_COL32(255, 255, 255, 200);
+      
+      // Horizontal line
+      drawList->AddLine(
+          ImVec2(center.x - crosshairSize, center.y),
+          ImVec2(center.x + crosshairSize, center.y),
+          crosshairColor, crosshairThickness);
+      // Vertical line
+      drawList->AddLine(
+          ImVec2(center.x, center.y - crosshairSize),
+          ImVec2(center.x, center.y + crosshairSize),
+          crosshairColor, crosshairThickness);
 
       ImGui::Render();
       ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -337,6 +467,13 @@ int main()
 
     // Release GPU resources for chunks before the OpenGL context is torn down.
     chunkManager.chunks.clear();
+    
+    // Clean up selection highlight resources
+    glDeleteVertexArrays(1, &selectionVAO);
+    glDeleteBuffers(1, &selectionVBO);
+    glDeleteBuffers(1, &selectionEBO);
+    selectionShader.Delete();
+
     ImGui_ImplGlfw_Shutdown();
     ImGui_ImplOpenGL3_Shutdown();
     ImGui::DestroyContext();
@@ -418,4 +555,51 @@ std::string resolveTexturePath(const std::string &relativePath)
   }
 
   return relativePath;
+}
+
+void mouseButtonCallback(GLFWwindow *window, int button, int action, int mods)
+{
+  // Ignore if ImGui wants mouse input
+  ImGuiIO& io = ImGui::GetIO();
+  if (io.WantCaptureMouse)
+    return;
+
+  // Only handle clicks when mouse is locked
+  if (!mouseLocked)
+    return;
+
+  if (action != GLFW_PRESS)
+    return;
+
+  if (!g_camera || !g_chunkManager)
+    return;
+
+  glm::vec3 forward = CameraForward(*g_camera);
+  auto hit = raycastVoxel(g_camera->position, forward, MAX_RAYCAST_DISTANCE, *g_chunkManager);
+
+  if (!hit.has_value())
+    return;
+
+  if (button == GLFW_MOUSE_BUTTON_LEFT)
+  {
+    // Break block (set to air)
+    setBlockAtWorld(hit->blockPos.x, hit->blockPos.y, hit->blockPos.z, 0, *g_chunkManager);
+  }
+  else if (button == GLFW_MOUSE_BUTTON_RIGHT)
+  {
+    // Place block (on the face we hit)
+    glm::ivec3 placePos = hit->blockPos + hit->normal;
+    
+    // Don't place if it would be inside the player
+    glm::ivec3 playerBlock(
+        static_cast<int>(std::floor(g_camera->position.x)),
+        static_cast<int>(std::floor(g_camera->position.y)),
+        static_cast<int>(std::floor(g_camera->position.z)));
+    glm::ivec3 playerFeet = playerBlock - glm::ivec3(0, 1, 0);
+    
+    if (placePos == playerBlock || placePos == playerFeet)
+      return;  // Would place inside player
+    
+    setBlockAtWorld(placePos.x, placePos.y, placePos.z, 3, *g_chunkManager);  // Place stone
+  }
 }
