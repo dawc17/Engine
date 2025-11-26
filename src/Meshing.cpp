@@ -114,8 +114,9 @@ void buildChunkMesh(Chunk &c)
             const Vertex *face = FACE_TABLE[dir];
             uint32_t baseIndex = verts.size();
 
-            // Get the tile index for this block type and face direction
+            // Get the tile index and rotation for this block type and face direction
             int tileIndex = g_blockTypes[type].faceTexture[dir];
+            int rotation = g_blockTypes[type].faceRotation[dir];
 
             // Determine if this is a positive or negative facing direction
             // For positive dirs (+X,+Y,+Z), face is on far side of slice (i+1)
@@ -143,6 +144,31 @@ void buildChunkMesh(Chunk &c)
               // Build UVs in block units so the shader can repeat the atlas tile across merged quads
               float localU = (vtx.uv.x > 0.5f) ? static_cast<float>(w) : 0.0f;
               float localV = (vtx.uv.y > 0.5f) ? static_cast<float>(h) : 0.0f;
+              
+              // Apply rotation/flip to UVs (0=normal, 1=90° CCW, 2=flip vertical, 3=90° CW)
+              switch (rotation)
+              {
+                case 1: // 90° CCW - swap and flip
+                  {
+                    float tmp = localU;
+                    localU = localV;
+                    localV = static_cast<float>(w) - tmp;
+                  }
+                  break;
+                case 2: // Flip vertical (upside down)
+                  localV = static_cast<float>(h) - localV;
+                  break;
+                case 3: // 90° CW - swap and flip
+                  {
+                    float tmp = localU;
+                    localU = static_cast<float>(h) - localV;
+                    localV = tmp;
+                  }
+                  break;
+                default: // 0 - no rotation
+                  break;
+              }
+              
               vtx.uv = glm::vec2(localU, localV);
               vtx.tileIndex = static_cast<float>(tileIndex);
 

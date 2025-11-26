@@ -9,7 +9,10 @@ void initBlockTypes()
     {
         block.solid = false;
         for (int i = 0; i < 6; i++)
+        {
             block.faceTexture[i] = 0;
+            block.faceRotation[i] = 0; // default: no rotation
+        }
     }
 
     // Block 0 is air - leave as default
@@ -17,24 +20,41 @@ void initBlockTypes()
     // Block 1: Dirt (same texture on all sides)
     g_blockTypes[1].solid = true;
     for (int i = 0; i < 6; i++)
-        g_blockTypes[1].faceTexture[i] = 0; // tile 0 = dirt
+        g_blockTypes[1].faceTexture[i] = 229; // tile 2 = dirt
+        g_blockTypes[1].faceRotation[0] = 1; // +X: 180°
+        g_blockTypes[1].faceRotation[1] = 1; // -X: 180°
+        g_blockTypes[1].faceRotation[4] = 2; // +Z: 180°
+        g_blockTypes[1].faceRotation[5] = 2; // -Z: 180°
 
     // Block 2: Grass (different top/side/bottom)
     g_blockTypes[2].solid = true;
-    g_blockTypes[2].faceTexture[0] = 2; // +X side
-    g_blockTypes[2].faceTexture[1] = 2; // -X side
-    g_blockTypes[2].faceTexture[2] = 1; // +Y top (grass top)
-    g_blockTypes[2].faceTexture[3] = 0; // -Y bottom (dirt)
-    g_blockTypes[2].faceTexture[4] = 2; // +Z side
-    g_blockTypes[2].faceTexture[5] = 2; // -Z side
-
+    g_blockTypes[2].faceTexture[0] = 78; // +X side (grass side)
+    g_blockTypes[2].faceTexture[1] = 78; // -X side
+    g_blockTypes[2].faceTexture[2] = 174; // +Y top (grass top)
+    g_blockTypes[2].faceTexture[3] = 229; // -Y bottom (dirt)
+    g_blockTypes[2].faceTexture[4] = 78; // +Z side
+    g_blockTypes[2].faceTexture[5] = 78; // -Z side
+    // Flip all side faces upside down (180°)
+    g_blockTypes[2].faceRotation[0] = 1; // +X: 180°
+    g_blockTypes[2].faceRotation[1] = 1; // -X: 180°
+    g_blockTypes[2].faceRotation[4] = 2; // +Z: 180°
+    g_blockTypes[2].faceRotation[5] = 2; // -Z: 180°
+    
     // Block 3: Stone
     g_blockTypes[3].solid = true;
     for (int i = 0; i < 6; i++)
-        g_blockTypes[3].faceTexture[i] = 3; // tile 3 = stone
+        g_blockTypes[3].faceTexture[i] = 72; // tile 1 = stone
+        g_blockTypes[3].faceRotation[0] = 1; // +X: 180°
+        g_blockTypes[3].faceRotation[1] = 1; // -X: 180°
+        g_blockTypes[3].faceRotation[4] = 2; // +Z: 180°
+        g_blockTypes[3].faceRotation[5] = 2; // -Z: 180°
 
     // Block 4: Sand
     g_blockTypes[4].solid = true;
     for (int i = 0; i < 6; i++)
-        g_blockTypes[4].faceTexture[i] = 8; // tile 4 = sand
+        g_blockTypes[4].faceTexture[i] = 480; // sand (row 0, around column 18)
+        g_blockTypes[4].faceRotation[0] = 1; // +X: 180°
+        g_blockTypes[4].faceRotation[1] = 1; // -X: 180°
+        g_blockTypes[4].faceRotation[4] = 2; // +Z: 180°
+        g_blockTypes[4].faceRotation[5] = 2; // -Z: 180°
 }

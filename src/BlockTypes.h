@@ -3,14 +3,15 @@
 #include <glm/glm.hpp>
 
 // Atlas configuration
-constexpr int ATLAS_TILES_X = 16;
-constexpr int ATLAS_TILES_Y = 16;
+constexpr int ATLAS_TILES_X = 32;  // 512 / 16 = 32 tiles
+constexpr int ATLAS_TILES_Y = 32;
 constexpr float TILE_U = 1.0f / ATLAS_TILES_X;
 constexpr float TILE_V = 1.0f / ATLAS_TILES_Y;
 
 struct BlockType
 {
-    int faceTexture[6]; // tile index for +X -X +Y -Y +Z -Z
+    int faceTexture[6];  // tile index for +X -X +Y -Y +Z -Z
+    int faceRotation[6]; // rotation for each face: 0=0°, 1=90°, 2=180°, 3=270° (CCW)
     bool solid;
 };
 

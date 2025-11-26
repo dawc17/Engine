@@ -33,8 +33,12 @@ Chunk *ChunkManager::loadChunk(int cx, int cy, int cz)
     for (int z = 0; z < CHUNK_SIZE; z++) {
       for (int y = 0; y < CHUNK_SIZE; y++) {
         int i = blockIndex(x, y, z);
-        if (y < 8)
-          c->blocks[i] = 1; // dirt (block 1 = dirt on all sides)
+        if (y < 5)
+          c->blocks[i] = 3; // stone
+        else if (y < 9)
+          c->blocks[i] = 1; // dirt
+        else if (y < 10)
+          c->blocks[i] = 2; // grass (top layer only)
         else
           c->blocks[i] = 0; // air
       }

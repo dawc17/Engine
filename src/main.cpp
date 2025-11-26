@@ -95,13 +95,13 @@ int main()
 
     int width = 0, height = 0, nrChannels = 0;
     std::string texturePath =
-        resolveTexturePath("assets/textures/atlas.png");
+        resolveTexturePath("assets/textures/blocks.png");
     unsigned char *data =
         stbi_load(texturePath.c_str(), &width, &height, &nrChannels, 0);
 
-    const int TILE_SIZE = 16;
-    const int TILES_X = 16;
-    const int TILES_Y = 16;
+    const int TILE_SIZE = 16;  // Each tile is 16x16 pixels
+    const int TILES_X = 32;     // 512 / 16 = 32 tiles wide
+    const int TILES_Y = 32;     // 512 / 16 = 32 tiles tall
     const int NUM_TILES = TILES_X * TILES_Y;
 
     if (data)
@@ -116,8 +116,8 @@ int main()
       
       // Copy each tile from the atlas into its own layer
       std::vector<unsigned char> tileData(TILE_SIZE * TILE_SIZE * nrChannels);
-      int tileSizeX = TILE_SIZE * nrChannels;
-      int rowLen = TILES_X * tileSizeX;
+      int tileSizeBytes = TILE_SIZE * nrChannels;
+      int atlasRowBytes = width * nrChannels;  // Full atlas row in bytes
 
       for (int ty = 0; ty < TILES_Y; ty++)
       {
@@ -125,11 +125,13 @@ int main()
         {
           int tileIndex = ty * TILES_X + tx;
           
-          unsigned char *ptr = data + ty * rowLen + tx * tileSizeX;
+          // Starting pixel of this tile in the atlas
+          unsigned char *tileStart = data + (ty * TILE_SIZE) * atlasRowBytes + tx * tileSizeBytes;
           for (int row = 0; row < TILE_SIZE; row++)
           {
-             std::copy(ptr + row * rowLen, ptr + row * rowLen + tileSizeX,
-                       tileData.begin() + row * tileSizeX);
+             std::copy(tileStart + row * atlasRowBytes, 
+                       tileStart + row * atlasRowBytes + tileSizeBytes,
+                       tileData.begin() + row * tileSizeBytes);
           }
           
           // Upload tile to its layer

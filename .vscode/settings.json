@@ -1,5 +1,6 @@
 {
     "files.associations": {
-        "tuple": "cpp"
+        "tuple": "cpp",
+        "string": "cpp"
     }
 }
