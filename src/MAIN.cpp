@@ -30,9 +30,9 @@ const int SCREEN_HEIGHT = 720;
 float vertices[] = {
     // coords             // colors           // textures
     -0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, // lower left
-    0.5f,  0.5f,  0.0f, 1.0f, 1.0f, 0.0f, 1.0f, 1.0f, // upper right
-    -0.5f, 0.5f,  0.0f, 1.0f, 1.0f, 0.0f, 0.0f, 1.0f, // upper left
-    0.5f,  -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f  // lower right
+    0.5f, 0.5f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f, 1.0f,   // upper right
+    -0.5f, 0.5f, 0.0f, 1.0f, 1.0f, 0.0f, 0.0f, 1.0f,  // upper left
+    0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f   // lower right
 };
 unsigned int indices[] = {
     // note that we start from 0!
@@ -40,8 +40,30 @@ unsigned int indices[] = {
     0, 3, 1  // second triangle
 };
 
-int main() {
-  try {
+struct Camera
+{
+  glm::vec3 position;
+  float yaw;
+  float pitch;
+  float fov;
+};
+
+glm::vec3 CameraForward(const Camera &cam)
+{
+  float yawRad = glm::radians(cam.yaw);
+  float pitchRad = glm::radians(cam.pitch);
+
+  glm::vec3 dir;
+  dir.x = cos(pitchRad) * cos(yawRad);
+  dir.y = sin(pitchRad);
+  dir.z = cos(pitchRad) * sin(yawRad);
+  return glm::normalize(dir);
+}
+
+int main()
+{
+  try
+  {
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
@@ -49,7 +71,8 @@ int main() {
 
     GLFWwindow *window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT,
                                           "LearnOpenGL", NULL, NULL);
-    if (window == NULL) {
+    if (window == NULL)
+    {
       std::cout << "Failed to initialize (bruh?)" << std::endl;
       glfwTerminate();
       return 1;
@@ -106,12 +129,15 @@ int main() {
     unsigned char *data =
         stbi_load(texturePath.c_str(), &width, &height, &nrChannels, 0);
 
-    if (data) {
+    if (data)
+    {
 
       glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB,
                    GL_UNSIGNED_BYTE, data);
       glGenerateMipmap(GL_TEXTURE_2D);
-    } else {
+    }
+    else
+    {
       std::cerr << "Failed to load texture at " << texturePath << ": "
                 << stbi_failure_reason() << std::endl;
       // Fallback magenta texture so we can still see geometry.
@@ -134,9 +160,20 @@ int main() {
 
     bool wireframeMode = false;
 
+    Camera cam{
+        glm::vec3(0.0f, 0.0f, 3.0f),
+        -90.0f,
+        0.0f,
+        70.0f};
+
+    float lastFrame = 0.0f;
+
     // main draw loop sigma
-    while (!glfwWindowShouldClose(window)) {
-      processInput(window);
+    while (!glfwWindowShouldClose(window))
+    {
+      float currentFrame = glfwGetTime();
+      float deltaTime = currentFrame - lastFrame;
+      processInput(window, cam, deltaTime);
 
       glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
       glClear(GL_COLOR_BUFFER_BIT);
@@ -189,30 +226,52 @@ int main() {
     glfwDestroyWindow(window);
     glfwTerminate();
     return 0;
-  } catch (const std::exception &ex) {
+  }
+  catch (const std::exception &ex)
+  {
     std::cerr << "Fatal error: " << ex.what() << std::endl;
     return EXIT_FAILURE;
   }
 }
 
-void framebuffer_size_callback(GLFWwindow *window, int width, int height) {
+void framebuffer_size_callback(GLFWwindow *window, int width, int height)
+{
   glViewport(0, 0, width, height);
 }
 
-void processInput(GLFWwindow *window) {
+void processInput(GLFWwindow *window, Camera& camera, float dt)
+{
   if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
     glfwSetWindowShouldClose(window, true);
+
+  float speed = 5.0f * dt;
+
+  glm::vec3 forward = CameraForward(camera);
+  glm::vec3 right = glm::normalize(glm::cross(forward, glm::vec3(0.0f, 1.0f, 0.0f)));
+
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+        camera.position += forward * speed;
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+        camera.position -= forward * speed;
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+        camera.position -= right * speed;
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+        camera.position += right * speed;
+
 }
 
-std::string resolveTexturePath(const std::string &relativePath) {
+std::string resolveTexturePath(const std::string &relativePath)
+{
   namespace fs = std::filesystem;
   fs::path direct(relativePath);
-  if (fs::exists(direct)) {
+  if (fs::exists(direct))
+  {
     return direct.string();
   }
 
   fs::path fromBuild = fs::path("..") / relativePath;
-  if (fs::exists(fromBuild)) {
+  if (fs::exists(fromBuild))
+  {
     return fromBuild.string();
   }
 
