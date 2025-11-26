@@ -1,6 +1,6 @@
 # === Sources for your app ===
 set(SOURCES
-    MAIN.cpp
+    main.cpp
     VBO.cpp
     VAO.cpp
     EBO.cpp
