@@ -1,5 +1,6 @@
 #pragma once
 #include "Chunk.h"
+#include "ChunkManager.h"
 #include <vector>
 #include <glm/glm.hpp>
 
@@ -10,5 +11,5 @@ struct Vertex
   float tileIndex;
 };
 
-void buildChunkMesh(Chunk &c);
+void buildChunkMesh(Chunk &c, ChunkManager &chunkManager);
 void uploadToGPU(Chunk &c, const std::vector<Vertex> &verts, const std::vector<uint32_t> &inds);

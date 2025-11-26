@@ -1,5 +1,6 @@
 #include "Meshing.h"
 #include "BlockTypes.h"
+#include "ChunkManager.h"
 #include <glad/glad.h>
 #include <cstddef> // for offsetof
 
@@ -20,15 +21,44 @@ static const uint32_t FACE_INDICES[6] = {
     0, 1, 2,
     0, 2, 3};
 
-void buildChunkMesh(Chunk &c)
+void buildChunkMesh(Chunk &c, ChunkManager &chunkManager)
 {
+  // Lambda to get block at local position, checking neighboring chunks at boundaries
   auto getBlock = [&](int x, int y, int z) -> BlockID
   {
-    if (x < 0 || x >= CHUNK_SIZE ||
-        y < 0 || y >= CHUNK_SIZE ||
-        z < 0 || z >= CHUNK_SIZE)
-      return 0; // treat out-of-bounds as air for now
-    return c.blocks[blockIndex(x, y, z)];
+    // If within chunk bounds, return directly
+    if (x >= 0 && x < CHUNK_SIZE &&
+        y >= 0 && y < CHUNK_SIZE &&
+        z >= 0 && z < CHUNK_SIZE)
+    {
+      return c.blocks[blockIndex(x, y, z)];
+    }
+    
+    // Otherwise, calculate which neighbor chunk and the local position within it
+    int neighborCX = c.position.x;
+    int neighborCY = c.position.y;
+    int neighborCZ = c.position.z;
+    int localX = x;
+    int localY = y;
+    int localZ = z;
+    
+    if (x < 0) { neighborCX--; localX = CHUNK_SIZE + x; }
+    else if (x >= CHUNK_SIZE) { neighborCX++; localX = x - CHUNK_SIZE; }
+    
+    if (y < 0) { neighborCY--; localY = CHUNK_SIZE + y; }
+    else if (y >= CHUNK_SIZE) { neighborCY++; localY = y - CHUNK_SIZE; }
+    
+    if (z < 0) { neighborCZ--; localZ = CHUNK_SIZE + z; }
+    else if (z >= CHUNK_SIZE) { neighborCZ++; localZ = z - CHUNK_SIZE; }
+    
+    // Get the neighbor chunk
+    Chunk *neighbor = chunkManager.getChunk(neighborCX, neighborCY, neighborCZ);
+    if (neighbor == nullptr)
+    {
+      return 0; // Treat unloaded chunks as air (will be fixed when neighbor loads)
+    }
+    
+    return neighbor->blocks[blockIndex(localX, localY, localZ)];
   };
 
   std::vector<Vertex> verts;
@@ -68,7 +98,27 @@ void buildChunkMesh(Chunk &c)
           glm::ivec3 npos = pos + n;
           BlockID neighbor = getBlock(npos.x, npos.y, npos.z);
 
-          if (current != 0 && neighbor == 0)
+          // Show face if:
+          // 1. Current block is solid AND
+          // 2. Neighbor is air (0) OR neighbor is transparent (unless current is also transparent of the same type)
+          bool showFace = false;
+          if (current != 0)
+          {
+            if (neighbor == 0)
+            {
+              showFace = true;
+            }
+            else if (g_blockTypes[neighbor].transparent)
+            {
+              // Don't cull faces against transparent blocks, unless same transparent type
+              if (current != neighbor)
+              {
+                showFace = true;
+              }
+            }
+          }
+
+          if (showFace)
           {
             mask[j][k] = current;
           }

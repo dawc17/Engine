@@ -50,7 +50,7 @@ Player* g_player = nullptr;
 ChunkManager* g_chunkManager = nullptr;
 
 // Block selection - list of placeable block IDs (skip air=0)
-const std::vector<uint8_t> PLACEABLE_BLOCKS = {1, 2, 3, 4};  // dirt, grass, stone, sand
+const std::vector<uint8_t> PLACEABLE_BLOCKS = {1, 2, 3, 4, 5, 6};  // dirt, grass, stone, sand, log, leaves
 int selectedBlockIndex = 2;  // Default to stone (index 2 = block ID 3)
 
 int main()
@@ -329,23 +329,27 @@ int main()
       glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(mvp));
 
       int cx = floor(player.position.x / CHUNK_SIZE);
-      int cy = 0; // for now
       int cz = floor(player.position.z / CHUNK_SIZE);
 
       const int LOAD_RADIUS = 4;
       const int UNLOAD_RADIUS = LOAD_RADIUS + 2;
+      const int CHUNK_HEIGHT_MIN = 0;   // Lowest chunk Y layer
+      const int CHUNK_HEIGHT_MAX = 4;   // Highest chunk Y layer (supports terrain up to Y=80)
 
-      // Load chunks within radius
+      // Load chunks within radius (including vertical layers)
       for (int dx = -LOAD_RADIUS; dx <= LOAD_RADIUS; dx++)
       {
         for (int dz = -LOAD_RADIUS; dz <= LOAD_RADIUS; dz++)
         {
-          int chunkX = cx + dx;
-          int chunkZ = cz + dz;
-
-          if (!chunkManager.hasChunk(chunkX, cy, chunkZ))
+          for (int cy = CHUNK_HEIGHT_MIN; cy <= CHUNK_HEIGHT_MAX; cy++)
           {
-            chunkManager.loadChunk(chunkX, cy, chunkZ);
+            int chunkX = cx + dx;
+            int chunkZ = cz + dz;
+
+            if (!chunkManager.hasChunk(chunkX, cy, chunkZ))
+            {
+              chunkManager.loadChunk(chunkX, cy, chunkZ);
+            }
           }
         }
       }
@@ -373,7 +377,7 @@ int main()
         Chunk *chunk = pair.second.get();
         if (chunk->dirtyMesh)
         {
-          buildChunkMesh(*chunk);
+          buildChunkMesh(*chunk, chunkManager);
           chunk->dirtyMesh = false;
         }
 
@@ -457,7 +461,7 @@ int main()
       ImGui::Separator();
       
       // Block names for display
-      const char* blockNames[] = {"Air", "Dirt", "Grass", "Stone", "Sand"};
+      const char* blockNames[] = {"Air", "Dirt", "Grass", "Stone", "Sand", "Oak Log", "Oak Leaves"};
       uint8_t selectedBlockId = PLACEABLE_BLOCKS[selectedBlockIndex];
       ImGui::Text("Selected: %s (ID: %d)", blockNames[selectedBlockId], selectedBlockId);
       ImGui::Text("Scroll wheel to change block");

@@ -4,10 +4,11 @@ std::array<BlockType, 256> g_blockTypes;
 
 void initBlockTypes()
 {
-    // Initialize all blocks as air (non-solid)
+    // Initialize all blocks as air (non-solid, transparent)
     for (auto &block : g_blockTypes)
     {
         block.solid = false;
+        block.transparent = true;  // Air is transparent
         for (int i = 0; i < 6; i++)
         {
             block.faceTexture[i] = 0;
@@ -19,6 +20,7 @@ void initBlockTypes()
 
     // Block 1: Dirt (same texture on all sides)
     g_blockTypes[1].solid = true;
+    g_blockTypes[1].transparent = false;
     for (int i = 0; i < 6; i++)
     {
         g_blockTypes[1].faceTexture[i] = 229; // tile 2 = dirt
@@ -31,6 +33,7 @@ void initBlockTypes()
 
     // Block 2: Grass (different top/side/bottom)
     g_blockTypes[2].solid = true;
+    g_blockTypes[2].transparent = false;
     g_blockTypes[2].faceTexture[0] = 78; // +X side (grass side)
     g_blockTypes[2].faceTexture[1] = 78; // -X side
     g_blockTypes[2].faceTexture[2] = 174; // +Y top (grass top)
@@ -45,6 +48,7 @@ void initBlockTypes()
     
     // Block 3: Stone
     g_blockTypes[3].solid = true;
+    g_blockTypes[3].transparent = false;
     for (int i = 0; i < 6; i++)
     {
         g_blockTypes[3].faceTexture[i] = 72; // tile 1 = stone
@@ -57,6 +61,7 @@ void initBlockTypes()
 
     // Block 4: Sand
     g_blockTypes[4].solid = true;
+    g_blockTypes[4].transparent = false;
     for (int i = 0; i < 6; i++)
     {
         g_blockTypes[4].faceTexture[i] = 480; // sand (row 0, around column 18)
@@ -66,4 +71,27 @@ void initBlockTypes()
     g_blockTypes[4].faceRotation[1] = 1; // -X: 180 deg
     g_blockTypes[4].faceRotation[4] = 2; // +Z: 180 deg
     g_blockTypes[4].faceRotation[5] = 2; // -Z: 180 deg
+
+    // Block 5: Oak Log (different top/bottom vs sides)
+    g_blockTypes[5].solid = true;
+    g_blockTypes[5].transparent = false;
+    g_blockTypes[5].faceTexture[0] = 330; // +X side (bark)
+    g_blockTypes[5].faceTexture[1] = 330; // -X side (bark)
+    g_blockTypes[5].faceTexture[2] = 329; // +Y top (log top)
+    g_blockTypes[5].faceTexture[3] = 329; // -Y bottom (log top)
+    g_blockTypes[5].faceTexture[4] = 330; // +Z side (bark)
+    g_blockTypes[5].faceTexture[5] = 330; // -Z side (bark)
+    g_blockTypes[5].faceRotation[0] = 1;
+    g_blockTypes[5].faceRotation[1] = 1;
+    g_blockTypes[5].faceRotation[4] = 2;
+    g_blockTypes[5].faceRotation[5] = 2;
+
+    // Block 6: Oak Leaves (transparent - don't cull faces)
+    g_blockTypes[6].solid = true;
+    g_blockTypes[6].transparent = true;  // Leaves are see-through
+    for (int i = 0; i < 6; i++)
+    {
+        g_blockTypes[6].faceTexture[i] = 328; // leaves texture
+        g_blockTypes[6].faceRotation[i] = 0;
+    }
 }
