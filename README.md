@@ -1,4 +1,4 @@
-# VoxelEngine
+# Engine
 
 Small OpenGL playground that draws a textured, rotating quad with ImGui controls. Uses CMake with vendored GLAD, ImGui, and GLM (see `libs/`).
 
