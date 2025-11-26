@@ -19,6 +19,8 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <iostream>
 #include <string>
+#include <unordered_map>
+#include <cstdint>
 
 struct Camera
 {
@@ -35,6 +37,79 @@ glm::vec3 CameraForward(const Camera &camera)
   forward.y = sin(glm::radians(camera.pitch));
   forward.z = sin(glm::radians(camera.yaw)) * cos(glm::radians(camera.pitch));
   return glm::normalize(forward);
+}
+
+// chunks
+using BlockID = uint8_t;
+constexpr int CHUNK_SIZE = 16;
+constexpr int CHUNK_VOLUME = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
+
+struct Chunk
+{
+  glm::ivec3 position;
+  BlockID blocks[CHUNK_VOLUME];
+
+  bool dirtyMesh = true;
+  GLuint vao, vbo, ebo;
+};
+
+// chunk manager
+inline int64_t chunkKey(int x, int y, int z)
+{
+  return ((int64_t)x << 42) ^ ((int64_t)y << 21) ^ (int64_t)z;
+}
+
+struct ChunkManager
+{
+  std::unordered_map<int64_t, Chunk *> chunks;
+
+  Chunk *getChunk(int cx, int cy, int cz);
+  bool hasChunk(int cx, int cy, int cz);
+  Chunk *loadChunk(int cx, int cy, int cz);
+  void unloadChunk(int cx, int cy, int cz);
+};
+
+bool ChunkManager::hasChunk(int cx, int cy, int cz)
+{
+  return chunks.find(chunkKey(cx, cy, cz)) != chunks.end();
+}
+
+Chunk *ChunkManager::getChunk(int cx, int cy, int cz)
+{
+  auto it = chunks.find(chunkKey(cx, cy, cz));
+  if (it == chunks.end())
+    return nullptr;
+  return it->second;
+}
+
+Chunk *ChunkManager::loadChunk(int cx, int cy, int cz)
+{
+  if (hasChunk(cx, cy, cz))
+    return getChunk(cx, cy, cz);
+
+  std::cout << "Loading chunk at (" << cx << ", " << cy << ", " << cz << ")" << std::endl;
+
+  Chunk *c = new Chunk();
+  c->position = {cx, cy, cz};
+
+  // fill with something simple for now
+  for (int i = 0; i < CHUNK_VOLUME; i++)
+    c->blocks[i] = 0; // air
+
+  chunks[chunkKey(cx, cy, cz)] = c;
+  return c;
+}
+
+void ChunkManager::unloadChunk(int cx, int cy, int cz)
+{
+  auto key = chunkKey(cx, cy, cz);
+  auto it = chunks.find(key);
+
+  if (it != chunks.end())
+  {
+    delete it->second; // free memory
+    chunks.erase(it);
+  }
 }
 
 void framebuffer_size_callback(GLFWwindow *window, int width, int height);
@@ -174,6 +249,8 @@ int main()
 
     float lastFrame = 0.0f;
 
+    ChunkManager chunkManager;
+
     // main draw loop sigma
     while (!glfwWindowShouldClose(window))
     {
@@ -247,6 +324,27 @@ int main()
       unsigned int transformLoc =
           glGetUniformLocation(shaderProgram.ID, "transform");
       glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(mvp));
+
+      int cx = floor(cam.position.x / CHUNK_SIZE);
+      int cy = 0; // for now
+      int cz = floor(cam.position.z / CHUNK_SIZE);
+
+      const int LOAD_RADIUS = 4;
+
+      for (int dx = -LOAD_RADIUS; dx <= LOAD_RADIUS; dx++)
+      {
+        for (int dz = -LOAD_RADIUS; dz <= LOAD_RADIUS; dz++)
+        {
+
+          int chunkX = cx + dx;
+          int chunkZ = cz + dz;
+
+          if (!chunkManager.hasChunk(chunkX, cy, chunkZ))
+          {
+            chunkManager.loadChunk(chunkX, cy, chunkZ);
+          }
+        }
+      }
 
       glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
