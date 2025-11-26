@@ -36,5 +36,5 @@ void initBlockTypes()
     // Block 4: Sand
     g_blockTypes[4].solid = true;
     for (int i = 0; i < 6; i++)
-        g_blockTypes[4].faceTexture[i] = 4; // tile 4 = sand
+        g_blockTypes[4].faceTexture[i] = 8; // tile 4 = sand
 }

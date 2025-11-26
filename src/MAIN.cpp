@@ -12,6 +12,7 @@
 #include "stb_image.h"
 
 #include <GLFW/glfw3.h>
+#include <algorithm>
 #include <cstdlib>
 #include <exception>
 #include <filesystem>
@@ -21,9 +22,8 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <iostream>
 #include <string>
-#include <vector>
 #include <tuple>
-#include <cmath>
+#include <vector>
 
 void framebuffer_size_callback(GLFWwindow *window, int width, int height);
 void processInput(GLFWwindow *window, Camera &camera, float dt);
@@ -83,10 +83,15 @@ int main()
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D_ARRAY, textureArray);
     
-    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    // Enable anisotropic filtering
+    GLfloat maxAnisotropy = 0.0f;
+    glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &maxAnisotropy);
+    glTexParameterf(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAX_ANISOTROPY, maxAnisotropy);
 
     int width = 0, height = 0, nrChannels = 0;
     std::string texturePath =
@@ -111,20 +116,20 @@ int main()
       
       // Copy each tile from the atlas into its own layer
       std::vector<unsigned char> tileData(TILE_SIZE * TILE_SIZE * nrChannels);
+      int tileSizeX = TILE_SIZE * nrChannels;
+      int rowLen = TILES_X * tileSizeX;
+
       for (int ty = 0; ty < TILES_Y; ty++)
       {
         for (int tx = 0; tx < TILES_X; tx++)
         {
           int tileIndex = ty * TILES_X + tx;
           
-          // Extract tile pixels row by row
+          unsigned char *ptr = data + ty * rowLen + tx * tileSizeX;
           for (int row = 0; row < TILE_SIZE; row++)
           {
-            int srcY = ty * TILE_SIZE + row;
-            int srcX = tx * TILE_SIZE;
-            int srcOffset = (srcY * width + srcX) * nrChannels;
-            int dstOffset = row * TILE_SIZE * nrChannels;
-            memcpy(&tileData[dstOffset], &data[srcOffset], TILE_SIZE * nrChannels);
+             std::copy(ptr + row * rowLen, ptr + row * rowLen + tileSizeX,
+                       tileData.begin() + row * tileSizeX);
           }
           
           // Upload tile to its layer
@@ -134,6 +139,7 @@ int main()
                           format, GL_UNSIGNED_BYTE, tileData.data());
         }
       }
+      glGenerateMipmap(GL_TEXTURE_2D_ARRAY);
       std::cout << "Loaded texture array with " << NUM_TILES << " tiles" << std::endl;
     }
     else
