@@ -1,10 +1,12 @@
 #include "../libs/imgui/backends/imgui_impl_glfw.h"
 #include "../libs/imgui/backends/imgui_impl_opengl3.h"
 #include "../libs/imgui/imgui.h"
-#include "EBO.h"
 #include "ShaderClass.h"
-#include "VAO.h"
-#include "VBO.h"
+#include "Camera.h"
+#include "Chunk.h"
+#include "ChunkManager.h"
+#include "Meshing.h"
+#include "BlockTypes.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -19,322 +21,9 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <iostream>
 #include <string>
-#include <unordered_map>
-#include <cstdint>
-
-struct Camera
-{
-  glm::vec3 position;
-  float yaw;
-  float pitch;
-  float fov;
-};
-
-glm::vec3 CameraForward(const Camera &camera)
-{
-  glm::vec3 forward;
-  forward.x = cos(glm::radians(camera.yaw)) * cos(glm::radians(camera.pitch));
-  forward.y = sin(glm::radians(camera.pitch));
-  forward.z = sin(glm::radians(camera.yaw)) * cos(glm::radians(camera.pitch));
-  return glm::normalize(forward);
-}
-
-// chunks
-using BlockID = uint8_t;
-constexpr int CHUNK_SIZE = 16;
-constexpr int CHUNK_VOLUME = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
-
-struct Chunk
-{
-  glm::ivec3 position;
-  BlockID blocks[CHUNK_VOLUME];
-
-  bool dirtyMesh = true;
-  GLuint vao, vbo, ebo;
-  uint32_t indexCount = 0;
-  uint32_t vertexCount = 0;
-};
-
-constexpr glm::ivec3 DIRS[6] = {
-    {1, 0, 0},  // +X
-    {-1, 0, 0}, // -X
-    {0, 1, 0},  // +Y
-    {0, -1, 0}, // -Y
-    {0, 0, 1},  // +Z
-    {0, 0, -1}  // -Z
-};
-
-inline int blockIndex(int x, int y, int z)
-{
-  return x + CHUNK_SIZE * (y + CHUNK_SIZE * z);
-}
-
-// chunk manager
-inline int64_t chunkKey(int x, int y, int z)
-{
-  return ((int64_t)x << 42) ^ ((int64_t)y << 21) ^ (int64_t)z;
-}
-
-struct ChunkManager
-{
-  std::unordered_map<int64_t, Chunk *> chunks;
-
-  Chunk *getChunk(int cx, int cy, int cz);
-  bool hasChunk(int cx, int cy, int cz);
-  Chunk *loadChunk(int cx, int cy, int cz);
-  void unloadChunk(int cx, int cy, int cz);
-};
-
-bool ChunkManager::hasChunk(int cx, int cy, int cz)
-{
-  return chunks.find(chunkKey(cx, cy, cz)) != chunks.end();
-}
-
-Chunk *ChunkManager::getChunk(int cx, int cy, int cz)
-{
-  auto it = chunks.find(chunkKey(cx, cy, cz));
-  if (it == chunks.end())
-    return nullptr;
-  return it->second;
-}
-
-Chunk *ChunkManager::loadChunk(int cx, int cy, int cz)
-{
-  if (hasChunk(cx, cy, cz))
-    return getChunk(cx, cy, cz);
-
-  std::cout << "Loading chunk at (" << cx << ", " << cy << ", " << cz << ")" << std::endl;
-
-  Chunk *c = new Chunk();
-  c->position = {cx, cy, cz};
-
-  glGenVertexArrays(1, &c->vao);
-  glGenBuffers(1, &c->vbo);
-  glGenBuffers(1, &c->ebo);
-
-  // fill with something simple for now
-    for (int y = 0; y < CHUNK_SIZE; y++) {
-      for (int x = 0; x < CHUNK_SIZE; x++) {
-        for (int z = 0; z < CHUNK_SIZE; z++) {
-            int i = blockIndex(x, y, z);
-            if (y < 8)
-                c->blocks[i] = 1; // dirt
-            else
-                c->blocks[i] = 0; // air
-        }
-    }
-}
-
-
-  chunks[chunkKey(cx, cy, cz)] = c;
-  return c;
-}
-
-void ChunkManager::unloadChunk(int cx, int cy, int cz)
-{
-  auto key = chunkKey(cx, cy, cz);
-  auto it = chunks.find(key);
-
-  if (it != chunks.end())
-  {
-    delete it->second; // free memory
-    chunks.erase(it);
-  }
-}
-
-// meshing
-struct Vertex
-{
-  glm::vec3 pos;
-  glm::vec2 uv;
-};
-
-void uploadToGPU(Chunk &c, const std::vector<Vertex> &verts, const std::vector<uint32_t> &inds);
-
-static const Vertex FACE_POS_X[4] = { {{1, 0, 0}, {1, 0}}, {{1, 1, 0}, {1, 1}}, {{1, 1, 1}, {0, 1}}, {{1, 0, 1}, {0, 0}} };
-static const Vertex FACE_NEG_X[4] = { {{0, 0, 1}, {1, 0}}, {{0, 1, 1}, {1, 1}}, {{0, 1, 0}, {0, 1}}, {{0, 0, 0}, {0, 0}} };
-static const Vertex FACE_POS_Y[4] = { {{0, 1, 0}, {1, 0}}, {{0, 1, 1}, {1, 1}}, {{1, 1, 1}, {0, 1}}, {{1, 1, 0}, {0, 0}} };
-static const Vertex FACE_NEG_Y[4] = { {{0, 0, 1}, {1, 0}}, {{0, 0, 0}, {1, 1}}, {{1, 0, 0}, {0, 1}}, {{1, 0, 1}, {0, 0}} };
-static const Vertex FACE_POS_Z[4] = { {{1, 0, 1}, {1, 0}}, {{1, 1, 1}, {1, 1}}, {{0, 1, 1}, {0, 1}}, {{0, 0, 1}, {0, 0}} };
-static const Vertex FACE_NEG_Z[4] = { {{0, 0, 0}, {1, 0}}, {{0, 1, 0}, {1, 1}}, {{1, 1, 0}, {0, 1}}, {{1, 0, 0}, {0, 0}} };
-
-static const Vertex *FACE_TABLE[6] = {
-    FACE_POS_X, FACE_NEG_X,
-    FACE_POS_Y, FACE_NEG_Y,
-    FACE_POS_Z, FACE_NEG_Z
-};
-
-static const uint32_t FACE_INDICES[6] = {
-    0, 1, 2,
-    0, 2, 3};
-
-void buildChunkMesh(Chunk &c)
-{
-  auto getBlock = [&](int x, int y, int z) -> BlockID
-  {
-    if (x < 0 || x >= CHUNK_SIZE ||
-        y < 0 || y >= CHUNK_SIZE ||
-        z < 0 || z >= CHUNK_SIZE)
-      return 0; // treat out-of-bounds as air for now
-    return c.blocks[blockIndex(x, y, z)];
-  };
-
-  std::vector<Vertex> verts;
-  std::vector<uint32_t> inds;
-
-  // Greedy meshing
-  for (int dir = 0; dir < 6; dir++)
-  {
-    glm::ivec3 n = DIRS[dir];
-    int axis = 0;
-    if (n.y != 0) axis = 1;
-    if (n.z != 0) axis = 2;
-
-    int u = (axis + 1) % 3;
-    int v = (axis + 2) % 3;
-
-    // 2D mask for the slice
-    BlockID mask[CHUNK_SIZE][CHUNK_SIZE];
-    
-    for (int i = 0; i < CHUNK_SIZE; i++)
-    {
-      // 1. Compute mask
-      for (int j = 0; j < CHUNK_SIZE; j++) // v
-      {
-        for (int k = 0; k < CHUNK_SIZE; k++) // u
-        {
-          glm::ivec3 pos;
-          pos[axis] = i;
-          pos[u] = k;
-          pos[v] = j;
-
-          BlockID current = c.blocks[blockIndex(pos.x, pos.y, pos.z)];
-          
-          glm::ivec3 npos = pos + n;
-          BlockID neighbor = getBlock(npos.x, npos.y, npos.z);
-
-          if (current != 0 && neighbor == 0)
-          {
-            mask[j][k] = current;
-          }
-          else
-          {
-            mask[j][k] = 0;
-          }
-        }
-      }
-
-      // 2. Greedy meshing on mask
-      for (int j = 0; j < CHUNK_SIZE; j++)
-      {
-        for (int k = 0; k < CHUNK_SIZE; k++)
-        {
-          if (mask[j][k] != 0)
-          {
-            BlockID type = mask[j][k];
-            int w = 1;
-            int h = 1;
-
-            // Compute width
-            while (k + w < CHUNK_SIZE && mask[j][k + w] == type)
-            {
-              w++;
-            }
-
-            // Compute height
-            bool done = false;
-            while (j + h < CHUNK_SIZE)
-            {
-              for (int dx = 0; dx < w; dx++)
-              {
-                if (mask[j + h][k + dx] != type)
-                {
-                  done = true;
-                  break;
-                }
-              }
-              if (done) break;
-              h++;
-            }
-
-            // Add quad
-            const Vertex *face = FACE_TABLE[dir];
-            uint32_t baseIndex = verts.size();
-
-            for (int vIdx = 0; vIdx < 4; vIdx++)
-            {
-              Vertex vtx = face[vIdx];
-              glm::vec3 finalPos;
-
-              // Axis (normal)
-              finalPos[axis] = i + vtx.pos[axis];
-
-              // U axis
-              if (vtx.pos[u] > 0.5f) finalPos[u] = k + w;
-              else finalPos[u] = k;
-
-              // V axis
-              if (vtx.pos[v] > 0.5f) finalPos[v] = j + h;
-              else finalPos[v] = j;
-
-              vtx.pos = finalPos;
-              
-              // Scale UVs
-              if (vtx.uv.x > 0.5f) vtx.uv.x = w;
-              if (vtx.uv.y > 0.5f) vtx.uv.y = h;
-
-              verts.push_back(vtx);
-            }
-
-            for (int idx = 0; idx < 6; idx++)
-              inds.push_back(baseIndex + FACE_INDICES[idx]);
-
-            // Clear mask
-            for (int dy = 0; dy < h; dy++)
-            {
-              for (int dx = 0; dx < w; dx++)
-              {
-                mask[j + dy][k + dx] = 0;
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-
-  uploadToGPU(c, verts, inds);
-}
-
-void uploadToGPU(Chunk &c,
-                 const std::vector<Vertex> &verts,
-                 const std::vector<uint32_t> &inds)
-{
-  glBindVertexArray(c.vao);
-
-  glBindBuffer(GL_ARRAY_BUFFER, c.vbo);
-  glBufferData(GL_ARRAY_BUFFER,
-               verts.size() * sizeof(Vertex),
-               verts.data(),
-               GL_STATIC_DRAW);
-
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, c.ebo);
-  glBufferData(GL_ELEMENT_ARRAY_BUFFER,
-               inds.size() * sizeof(uint32_t),
-               inds.data(),
-               GL_STATIC_DRAW);
-
-  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),
-                        (void *)offsetof(Vertex, pos));
-  glEnableVertexAttribArray(0);
-
-  glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex),
-                        (void *)offsetof(Vertex, uv));
-  glEnableVertexAttribArray(1);
-
-  c.indexCount = inds.size();
-  c.vertexCount = verts.size();
-}
+#include <vector>
+#include <tuple>
+#include <cmath>
 
 void framebuffer_size_callback(GLFWwindow *window, int width, int height);
 void processInput(GLFWwindow *window, Camera &camera, float dt);
@@ -350,19 +39,6 @@ bool mouseLocked = true;
 bool firstMouse = true;
 double lastMouseX = SCREEN_WIDTH / 2.0;
 double lastMouseY = SCREEN_HEIGHT / 2.0;
-
-float vertices[] = {
-    // coords 3            // colors 3    // textures 2
-    -0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, // lower left
-    0.5f, 0.5f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f, 1.0f,   // upper right
-    -0.5f, 0.5f, 0.0f, 1.0f, 1.0f, 0.0f, 0.0f, 1.0f,  // upper left
-    0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f   // lower right
-};
-unsigned int indices[] = {
-    // note that we start from 0!
-    0, 1, 2, // first triangle
-    0, 3, 1  // second triangle
-};
 
 int main()
 {
@@ -386,6 +62,9 @@ int main()
 
     gladLoadGL();
 
+    // Enable depth testing
+    glEnable(GL_DEPTH_TEST);
+
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     // Ensure a valid viewport before the first resize event fires.
     int fbWidth = 0, fbHeight = 0;
@@ -394,66 +73,82 @@ int main()
 
     Shader shaderProgram("default.vert", "default.frag");
     shaderProgram.Activate();
-    glUniform1i(glGetUniformLocation(shaderProgram.ID, "ourTexture"), 0);
+    glUniform1i(glGetUniformLocation(shaderProgram.ID, "textureArray"), 0);
 
-    VAO VAO1;
-    VAO1.Bind();
+    stbi_set_flip_vertically_on_load(false);
 
-    // Generates Vertex Buffer Object and links it to vertices
-    VBO VBO1(vertices, sizeof(vertices));
-    // Generates Element Buffer Object and links it to indices
-    EBO EBO1(indices, sizeof(indices));
-
-    // Links VBO attributes such as coordinates and colors to VAO
-    // https://youtu.be/45MIykWJ-C4?t=2508
-    VAO1.LinkAttrib(VBO1, 0, 3, GL_FLOAT, 8 * sizeof(float), (void *)0);
-    VAO1.LinkAttrib(VBO1, 1, 3, GL_FLOAT, 8 * sizeof(float),
-                    (void *)(3 * sizeof(float)));
-    VAO1.LinkAttrib(VBO1, 2, 2, GL_FLOAT, 8 * sizeof(float),
-                    (void *)(6 * sizeof(float)));
-    // Unbind all to prevent accidentally modifying them
-    VAO1.Unbind();
-    VBO1.Unbind();
-    EBO1.Unbind();
-
-    stbi_set_flip_vertically_on_load(true);
-
-    unsigned int texture;
-    glGenTextures(1, &texture);
+    // Load atlas and convert to 2D texture array (each tile becomes a layer)
+    unsigned int textureArray;
+    glGenTextures(1, &textureArray);
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, texture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
-                    GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glBindTexture(GL_TEXTURE_2D_ARRAY, textureArray);
+    
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
     int width = 0, height = 0, nrChannels = 0;
     std::string texturePath =
-        resolveTexturePath("assets/textures/container.jpg");
+        resolveTexturePath("assets/textures/atlas.png");
     unsigned char *data =
         stbi_load(texturePath.c_str(), &width, &height, &nrChannels, 0);
 
+    const int TILE_SIZE = 16;
+    const int TILES_X = 16;
+    const int TILES_Y = 16;
+    const int NUM_TILES = TILES_X * TILES_Y;
+
     if (data)
     {
-
-      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB,
-                   GL_UNSIGNED_BYTE, data);
-      glGenerateMipmap(GL_TEXTURE_2D);
+      GLenum internalFormat = (nrChannels == 4) ? GL_RGBA8 : GL_RGB8;
+      GLenum format = (nrChannels == 4) ? GL_RGBA : GL_RGB;
+      
+      // Allocate storage for texture array
+      glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, internalFormat, 
+                   TILE_SIZE, TILE_SIZE, NUM_TILES, 0, 
+                   format, GL_UNSIGNED_BYTE, nullptr);
+      
+      // Copy each tile from the atlas into its own layer
+      std::vector<unsigned char> tileData(TILE_SIZE * TILE_SIZE * nrChannels);
+      for (int ty = 0; ty < TILES_Y; ty++)
+      {
+        for (int tx = 0; tx < TILES_X; tx++)
+        {
+          int tileIndex = ty * TILES_X + tx;
+          
+          // Extract tile pixels row by row
+          for (int row = 0; row < TILE_SIZE; row++)
+          {
+            int srcY = ty * TILE_SIZE + row;
+            int srcX = tx * TILE_SIZE;
+            int srcOffset = (srcY * width + srcX) * nrChannels;
+            int dstOffset = row * TILE_SIZE * nrChannels;
+            memcpy(&tileData[dstOffset], &data[srcOffset], TILE_SIZE * nrChannels);
+          }
+          
+          // Upload tile to its layer
+          glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 
+                          0, 0, tileIndex,
+                          TILE_SIZE, TILE_SIZE, 1,
+                          format, GL_UNSIGNED_BYTE, tileData.data());
+        }
+      }
+      std::cout << "Loaded texture array with " << NUM_TILES << " tiles" << std::endl;
     }
     else
     {
       std::cerr << "Failed to load texture at " << texturePath << ": "
                 << stbi_failure_reason() << std::endl;
-      // Fallback magenta texture so we can still see geometry.
-      unsigned char fallback[] = {255, 0, 255};
-      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 1, 1, 0, GL_RGB, GL_UNSIGNED_BYTE,
-                   fallback);
+      // fallback magenta texture
+      unsigned char fallback[] = {255, 0, 255, 255};
+      glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_RGBA8, 1, 1, 1, 0, 
+                   GL_RGBA, GL_UNSIGNED_BYTE, fallback);
     }
     stbi_image_free(data);
 
-    // Gets ID of uniform called "scale"
-    GLuint uniID = glGetUniformLocation(shaderProgram.ID, "scale");
+    // Initialize block type registry
+    initBlockTypes();
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -517,12 +212,10 @@ int main()
       processInput(window, cam, deltaTime);
 
       glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-      glClear(GL_COLOR_BUFFER_BIT);
+      glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
       shaderProgram.Activate();
-      glUniform1f(uniID, 0.2f);
-      glBindTexture(GL_TEXTURE_2D, texture);
-      VAO1.Bind();
+      glBindTexture(GL_TEXTURE_2D_ARRAY, textureArray);
 
       if (wireframeMode)
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
@@ -554,12 +247,13 @@ int main()
       int cz = floor(cam.position.z / CHUNK_SIZE);
 
       const int LOAD_RADIUS = 4;
+      const int UNLOAD_RADIUS = LOAD_RADIUS + 2;
 
+      // Load chunks within radius
       for (int dx = -LOAD_RADIUS; dx <= LOAD_RADIUS; dx++)
       {
         for (int dz = -LOAD_RADIUS; dz <= LOAD_RADIUS; dz++)
         {
-
           int chunkX = cx + dx;
           int chunkZ = cz + dz;
 
@@ -570,17 +264,42 @@ int main()
         }
       }
 
-      for (auto &[key, chunk] : chunkManager.chunks)
+      // unload chunks outside unload radius
+      std::vector<std::tuple<int, int, int>> toUnload;
+      for (auto &pair : chunkManager.chunks)
       {
+        Chunk *chunk = pair.second;
+        int distX = chunk->position.x - cx;
+        int distZ = chunk->position.z - cz;
+        if (std::abs(distX) > UNLOAD_RADIUS || std::abs(distZ) > UNLOAD_RADIUS)
+        {
+          toUnload.push_back({chunk->position.x, chunk->position.y, chunk->position.z});
+        }
+      }
+      for (auto &[ux, uy, uz] : toUnload)
+      {
+        chunkManager.unloadChunk(ux, uy, uz);
+      }
+
+      // render chunks
+      for (auto &pair : chunkManager.chunks)
+      {
+        Chunk *chunk = pair.second;
         if (chunk->dirtyMesh)
         {
           buildChunkMesh(*chunk);
           chunk->dirtyMesh = false;
         }
 
-        glBindVertexArray(chunk->vao);
-        glDrawElements(GL_TRIANGLES, chunk->indexCount,
-                       GL_UNSIGNED_INT, 0);
+        if (chunk->indexCount > 0)
+        {
+          glm::mat4 chunkModel = glm::translate(glm::mat4(1.0f), glm::vec3(chunk->position.x * CHUNK_SIZE, chunk->position.y * CHUNK_SIZE, chunk->position.z * CHUNK_SIZE));
+          glm::mat4 chunkMVP = proj * view * chunkModel;
+          glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(chunkMVP));
+
+          glBindVertexArray(chunk->vao);
+          glDrawElements(GL_TRIANGLES, chunk->indexCount, GL_UNSIGNED_INT, 0);
+        }
       }
 
       ImGui::Begin("Debug");
@@ -608,9 +327,6 @@ int main()
     ImGui_ImplOpenGL3_Shutdown();
     ImGui::DestroyContext();
 
-    VAO1.Delete();
-    VBO1.Delete();
-    EBO1.Delete();
     shaderProgram.Delete();
 
     glfwDestroyWindow(window);

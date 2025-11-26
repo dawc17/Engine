@@ -5,6 +5,11 @@ set(SOURCES
     VAO.cpp
     EBO.cpp
     ShaderClass.cpp
+    Camera.cpp
+    Chunk.cpp
+    ChunkManager.cpp
+    Meshing.cpp
+    BlockTypes.cpp
 )
 
 # === Create the executable FIRST ===
