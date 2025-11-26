@@ -28,13 +28,13 @@ Chunk *ChunkManager::loadChunk(int cx, int cy, int cz)
   glGenBuffers(1, &c->vbo);
   glGenBuffers(1, &c->ebo);
 
-  // fill with terrain - all stone for testing
+  // fill with terrain
   for (int x = 0; x < CHUNK_SIZE; x++) {
     for (int z = 0; z < CHUNK_SIZE; z++) {
       for (int y = 0; y < CHUNK_SIZE; y++) {
         int i = blockIndex(x, y, z);
         if (y < 8)
-          c->blocks[i] = 2; // stone
+          c->blocks[i] = 1; // dirt (block 1 = dirt on all sides)
         else
           c->blocks[i] = 0; // air
       }
