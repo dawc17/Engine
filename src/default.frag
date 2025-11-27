@@ -3,22 +3,42 @@ out vec4 FragColor;
 
 in vec2 LocalUV;
 flat in float TileIndex;
-in float Light;
+in float SkyLight;
+in float FaceShade;
+in float FragDepth;
+in vec3 WorldPos;
 
 uniform sampler2DArray textureArray;
+uniform float timeOfDay;
+uniform vec3 cameraPos;
+uniform vec3 skyColor;
+uniform vec3 fogColor;
+uniform float fogDensity;
+uniform float ambientLight;
 
 void main()
 {
-    // Sample from the texture array - layer is the tile index
     vec4 texColor = texture(textureArray, vec3(LocalUV, TileIndex));
     
-    // Alpha test - discard nearly transparent pixels (for leaves, etc.)
     if (texColor.a < 0.5)
         discard;
     
-    // Apply AO directly - Light already contains face shading * AO brightness
-    // This gives the classic Minecraft look with dark crevices
-    vec3 litColor = texColor.rgb * Light;
+    float sunBrightness = timeOfDay;
+    float skyLightContribution = SkyLight * sunBrightness;
+    float totalLight = max(skyLightContribution, ambientLight);
+    float finalLight = totalLight * FaceShade;
     
-    FragColor = vec4(litColor, texColor.a);
+    vec3 litColor = texColor.rgb * finalLight;
+    
+    float dist = length(WorldPos - cameraPos);
+    float fogFactor = 1.0 - exp(-dist * fogDensity);
+    fogFactor = clamp(fogFactor, 0.0, 1.0);
+    
+    float shadowFogBoost = 1.0 - SkyLight;
+    fogFactor = fogFactor + shadowFogBoost * 0.15;
+    fogFactor = clamp(fogFactor, 0.0, 0.95);
+    
+    vec3 finalColor = mix(litColor, fogColor, fogFactor);
+    
+    FragColor = vec4(finalColor, texColor.a);
 }

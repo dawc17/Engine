@@ -8,9 +8,10 @@
 struct Vertex
 {
   glm::vec3 pos;
-  glm::vec2 uv;   // local UV in block units (0..width/height)
+  glm::vec2 uv;
   float tileIndex;
-  float light;    // light level (0.0 = dark, 1.0 = full sunlight)
+  float skyLight;
+  float faceShade;
 };
 
 // Face direction indices for lighting (matches DIRS array order)

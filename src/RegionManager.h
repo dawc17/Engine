@@ -76,6 +76,12 @@ private:
     uint32_t allocateSectors(uint32_t numBytes);
 };
 
+struct PlayerData
+{
+    float x, y, z;
+    float yaw, pitch;
+};
+
 class RegionManager
 {
 public:
@@ -85,6 +91,9 @@ public:
     bool loadChunkData(int cx, int cy, int cz, BlockID* outBlocks);
     void saveChunkData(int cx, int cy, int cz, const BlockID* blocks);
     void flush();
+
+    bool loadPlayerData(PlayerData& outData);
+    void savePlayerData(const PlayerData& data);
 
 private:
     std::string worldPath;

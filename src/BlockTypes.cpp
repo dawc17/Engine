@@ -1,6 +1,8 @@
 #include "BlockTypes.h"
+#include <random>
 
 std::array<BlockType, 256> g_blockTypes;
+std::array<BlockType, 256> g_defaultBlockTypes;
 
 void initBlockTypes()
 {
@@ -88,10 +90,57 @@ void initBlockTypes()
 
     // Block 6: Oak Leaves (transparent - don't cull faces)
     g_blockTypes[6].solid = true;
-    g_blockTypes[6].transparent = true;  // Leaves are see-through
+    g_blockTypes[6].transparent = true;
     for (int i = 0; i < 6; i++)
     {
-        g_blockTypes[6].faceTexture[i] = 328; // leaves texture
+        g_blockTypes[6].faceTexture[i] = 328;
         g_blockTypes[6].faceRotation[i] = 0;
     }
+
+    // Block 7: Glass (transparent, solid)
+    g_blockTypes[7].solid = true;
+    g_blockTypes[7].transparent = true;
+    for (int i = 0; i < 6; i++)
+    {
+        g_blockTypes[7].faceTexture[i] = 264;
+        g_blockTypes[7].faceRotation[i] = 0;
+    }
+
+    // Block 8: Oak Planks
+    g_blockTypes[8].solid = true;
+    g_blockTypes[8].transparent = false;
+    for (int i = 0; i < 6; i++)
+    {
+        g_blockTypes[8].faceTexture[i] = 266;
+        g_blockTypes[8].faceRotation[i] = 0;
+    }
+    g_blockTypes[8].faceRotation[0] = 1;
+    g_blockTypes[8].faceRotation[1] = 1;
+    g_blockTypes[8].faceRotation[4] = 2;
+    g_blockTypes[8].faceRotation[5] = 2;
+
+    g_defaultBlockTypes = g_blockTypes;
+}
+
+void randomizeBlockTextures()
+{
+    static std::random_device rd;
+    static std::mt19937 gen(rd());
+    std::uniform_int_distribution<int> dist(0, ATLAS_TILES_X * ATLAS_TILES_Y - 1);
+
+    for (int blockId = 1; blockId < 256; blockId++)
+    {
+        if (g_blockTypes[blockId].solid)
+        {
+            for (int face = 0; face < 6; face++)
+            {
+                g_blockTypes[blockId].faceTexture[face] = dist(gen);
+            }
+        }
+    }
+}
+
+void resetBlockTextures()
+{
+    g_blockTypes = g_defaultBlockTypes;
 }

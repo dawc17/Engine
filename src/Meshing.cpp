@@ -6,12 +6,12 @@
 #include <queue>
 
 // Face templates now include default light value of 1.0
-static const Vertex FACE_POS_X[4] = { {{1, 0, 0}, {1, 0}, 0, 1.0f}, {{1, 1, 0}, {1, 1}, 0, 1.0f}, {{1, 1, 1}, {0, 1}, 0, 1.0f}, {{1, 0, 1}, {0, 0}, 0, 1.0f} };
-static const Vertex FACE_NEG_X[4] = { {{0, 0, 1}, {1, 0}, 0, 1.0f}, {{0, 1, 1}, {1, 1}, 0, 1.0f}, {{0, 1, 0}, {0, 1}, 0, 1.0f}, {{0, 0, 0}, {0, 0}, 0, 1.0f} };
-static const Vertex FACE_POS_Y[4] = { {{0, 1, 0}, {1, 0}, 0, 1.0f}, {{0, 1, 1}, {1, 1}, 0, 1.0f}, {{1, 1, 1}, {0, 1}, 0, 1.0f}, {{1, 1, 0}, {0, 0}, 0, 1.0f} };
-static const Vertex FACE_NEG_Y[4] = { {{0, 0, 1}, {1, 0}, 0, 1.0f}, {{0, 0, 0}, {1, 1}, 0, 1.0f}, {{1, 0, 0}, {0, 1}, 0, 1.0f}, {{1, 0, 1}, {0, 0}, 0, 1.0f} };
-static const Vertex FACE_POS_Z[4] = { {{1, 0, 1}, {1, 0}, 0, 1.0f}, {{1, 1, 1}, {1, 1}, 0, 1.0f}, {{0, 1, 1}, {0, 1}, 0, 1.0f}, {{0, 0, 1}, {0, 0}, 0, 1.0f} };
-static const Vertex FACE_NEG_Z[4] = { {{0, 0, 0}, {1, 0}, 0, 1.0f}, {{0, 1, 0}, {1, 1}, 0, 1.0f}, {{1, 1, 0}, {0, 1}, 0, 1.0f}, {{1, 0, 0}, {0, 0}, 0, 1.0f} };
+static const Vertex FACE_POS_X[4] = { {{1, 0, 0}, {1, 0}, 0, 1.0f, 1.0f}, {{1, 1, 0}, {1, 1}, 0, 1.0f, 1.0f}, {{1, 1, 1}, {0, 1}, 0, 1.0f, 1.0f}, {{1, 0, 1}, {0, 0}, 0, 1.0f, 1.0f} };
+static const Vertex FACE_NEG_X[4] = { {{0, 0, 1}, {1, 0}, 0, 1.0f, 1.0f}, {{0, 1, 1}, {1, 1}, 0, 1.0f, 1.0f}, {{0, 1, 0}, {0, 1}, 0, 1.0f, 1.0f}, {{0, 0, 0}, {0, 0}, 0, 1.0f, 1.0f} };
+static const Vertex FACE_POS_Y[4] = { {{0, 1, 0}, {1, 0}, 0, 1.0f, 1.0f}, {{0, 1, 1}, {1, 1}, 0, 1.0f, 1.0f}, {{1, 1, 1}, {0, 1}, 0, 1.0f, 1.0f}, {{1, 1, 0}, {0, 0}, 0, 1.0f, 1.0f} };
+static const Vertex FACE_NEG_Y[4] = { {{0, 0, 1}, {1, 0}, 0, 1.0f, 1.0f}, {{0, 0, 0}, {1, 1}, 0, 1.0f, 1.0f}, {{1, 0, 0}, {0, 1}, 0, 1.0f, 1.0f}, {{1, 0, 1}, {0, 0}, 0, 1.0f, 1.0f} };
+static const Vertex FACE_POS_Z[4] = { {{1, 0, 1}, {1, 0}, 0, 1.0f, 1.0f}, {{1, 1, 1}, {1, 1}, 0, 1.0f, 1.0f}, {{0, 1, 1}, {0, 1}, 0, 1.0f, 1.0f}, {{0, 0, 1}, {0, 0}, 0, 1.0f, 1.0f} };
+static const Vertex FACE_NEG_Z[4] = { {{0, 0, 0}, {1, 0}, 0, 1.0f, 1.0f}, {{0, 1, 0}, {1, 1}, 0, 1.0f, 1.0f}, {{1, 1, 0}, {0, 1}, 0, 1.0f, 1.0f}, {{1, 0, 0}, {0, 0}, 0, 1.0f, 1.0f} };
 
 static const Vertex *FACE_TABLE[6] = {
     FACE_POS_X, FACE_NEG_X,
@@ -291,9 +291,8 @@ void buildChunkMesh(Chunk &c, ChunkManager &chunkManager)
     int u = (axis + 1) % 3;
     int v = (axis + 2) % 3;
 
-    // 2D mask for the slice
-    // 2D mask for the slice - just block type, no AO
     BlockID mask[CHUNK_SIZE][CHUNK_SIZE];
+    uint8_t lightMask[CHUNK_SIZE][CHUNK_SIZE];
 
     // Iterate through the chunk along the main axis
     for (int i = 0; i < CHUNK_SIZE; i++)
@@ -313,7 +312,6 @@ void buildChunkMesh(Chunk &c, ChunkManager &chunkManager)
           glm::ivec3 npos = pos + n;
           BlockID neighbor = getBlock(npos.x, npos.y, npos.z);
 
-          // Show face if current is solid and neighbor is air/transparent
           bool showFace = false;
           if (current != 0)
           {
@@ -331,10 +329,10 @@ void buildChunkMesh(Chunk &c, ChunkManager &chunkManager)
           }
 
           mask[j][k] = showFace ? current : 0;
+          lightMask[j][k] = showFace ? getSkyLight(npos.x, npos.y, npos.z) : 0;
         }
       }
 
-      // 2. Greedy meshing - merge by block type only
       for (int j = 0; j < CHUNK_SIZE; j++)
       {
         for (int k = 0; k < CHUNK_SIZE; k++)
@@ -342,20 +340,19 @@ void buildChunkMesh(Chunk &c, ChunkManager &chunkManager)
           if (mask[j][k] != 0)
           {
             BlockID type = mask[j][k];
+            uint8_t light = lightMask[j][k];
             int w = 1;
             int h = 1;
 
-            // Compute width
-            while (k + w < CHUNK_SIZE && mask[j][k + w] == type)
+            while (k + w < CHUNK_SIZE && mask[j][k + w] == type && lightMask[j][k + w] == light)
               w++;
 
-            // Compute height
             bool done = false;
             while (j + h < CHUNK_SIZE)
             {
               for (int dx = 0; dx < w; dx++)
               {
-                if (mask[j + h][k + dx] != type)
+                if (mask[j + h][k + dx] != type || lightMask[j + h][k + dx] != light)
                 {
                   done = true;
                   break;
@@ -365,15 +362,14 @@ void buildChunkMesh(Chunk &c, ChunkManager &chunkManager)
               h++;
             }
 
-            // Add quad
             const Vertex *face = FACE_TABLE[dir];
             uint32_t baseIndex = verts.size();
 
             int tileIndex = g_blockTypes[type].faceTexture[dir];
             int rotation = g_blockTypes[type].faceRotation[dir];
 
-            // Simple face-based shading - same light for all vertices
             float faceShade = FACE_SHADE[dir];
+            float skyLightNormalized = static_cast<float>(light) / static_cast<float>(MAX_SKY_LIGHT);
 
             int axisOffset = (n[axis] > 0) ? 1 : 0;
 
@@ -420,7 +416,8 @@ void buildChunkMesh(Chunk &c, ChunkManager &chunkManager)
               
               vtx.uv = glm::vec2(localU, localV);
               vtx.tileIndex = static_cast<float>(tileIndex);
-              vtx.light = faceShade;  // Same light for entire face
+              vtx.skyLight = skyLightNormalized;
+              vtx.faceShade = faceShade;
 
               verts.push_back(vtx);
             }
@@ -428,10 +425,14 @@ void buildChunkMesh(Chunk &c, ChunkManager &chunkManager)
             for (int idx = 0; idx < 6; idx++)
               inds.push_back(baseIndex + FACE_INDICES[idx]);
 
-            // Clear mask
             for (int dy = 0; dy < h; dy++)
+            {
               for (int dx = 0; dx < w; dx++)
+              {
                 mask[j + dy][k + dx] = 0;
+                lightMask[j + dy][k + dx] = 0;
+              }
+            }
           }
         }
       }
@@ -470,8 +471,12 @@ void uploadToGPU(Chunk &c, const std::vector<Vertex> &verts, const std::vector<u
   glEnableVertexAttribArray(2);
 
   glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, sizeof(Vertex),
-                        (void *)offsetof(Vertex, light));
+                        (void *)offsetof(Vertex, skyLight));
   glEnableVertexAttribArray(3);
+
+  glVertexAttribPointer(4, 1, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+                        (void *)offsetof(Vertex, faceShade));
+  glEnableVertexAttribArray(4);
 
   c.indexCount = inds.size();
   c.vertexCount = verts.size();
@@ -617,7 +622,8 @@ void buildChunkMeshOffThread(
 
               vtx.uv = glm::vec2(localU, localV);
               vtx.tileIndex = static_cast<float>(tileIndex);
-              vtx.light = faceShade;
+              vtx.skyLight = 1.0f;
+              vtx.faceShade = faceShade;
 
               outVertices.push_back(vtx);
             }

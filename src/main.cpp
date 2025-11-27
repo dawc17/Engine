@@ -88,12 +88,24 @@ double lastMouseX = SCREEN_WIDTH / 2.0;
 double lastMouseY = SCREEN_HEIGHT / 2.0;
 bool showDebugMenu = true;
 
+bool drunkMode = false;
+float drunkIntensity = 1.0f;
+bool discoMode = false;
+float discoSpeed = 10.0f;
+bool earthquakeMode = false;
+float earthquakeIntensity = 0.3f;
+
+float worldTime = 0.5f;
+float dayLength = 600.0f;
+bool autoTimeProgression = true;
+float fogDensity = 0.008f;
+
 // Global pointers for mouse callback
 Player* g_player = nullptr;
 ChunkManager* g_chunkManager = nullptr;
 
 // Block selection - list of placeable block IDs (skip air=0)
-const std::vector<uint8_t> PLACEABLE_BLOCKS = {1, 2, 3, 4, 5, 6};  // dirt, grass, stone, sand, log, leaves
+const std::vector<uint8_t> PLACEABLE_BLOCKS = {1, 2, 3, 4, 5, 6, 7, 8};
 int selectedBlockIndex = 2;  // Default to stone (index 2 = block ID 3)
 
 int main()
@@ -135,6 +147,13 @@ int main()
     shaderProgram.Activate();
     glUniform1i(glGetUniformLocation(shaderProgram.ID, "textureArray"), 0);
     GLint transformLoc = glGetUniformLocation(shaderProgram.ID, "transform");
+    GLint modelLoc = glGetUniformLocation(shaderProgram.ID, "model");
+    GLint timeOfDayLoc = glGetUniformLocation(shaderProgram.ID, "timeOfDay");
+    GLint cameraPosLoc = glGetUniformLocation(shaderProgram.ID, "cameraPos");
+    GLint skyColorLoc = glGetUniformLocation(shaderProgram.ID, "skyColor");
+    GLint fogColorLoc = glGetUniformLocation(shaderProgram.ID, "fogColor");
+    GLint fogDensityLoc = glGetUniformLocation(shaderProgram.ID, "fogDensity");
+    GLint ambientLightLoc = glGetUniformLocation(shaderProgram.ID, "ambientLight");
 
     stbi_set_flip_vertically_on_load(false);
 
@@ -278,6 +297,15 @@ int main()
     float lastFrame = 0.0f;
 
     RegionManager regionManager("saves/world");
+
+    PlayerData savedPlayer;
+    if (regionManager.loadPlayerData(savedPlayer))
+    {
+      player.position = glm::vec3(savedPlayer.x, savedPlayer.y, savedPlayer.z);
+      player.yaw = savedPlayer.yaw;
+      player.pitch = savedPlayer.pitch;
+      std::cout << "Loaded player position: (" << savedPlayer.x << ", " << savedPlayer.y << ", " << savedPlayer.z << ")" << std::endl;
+    }
     JobSystem jobSystem;
     jobSystem.setRegionManager(&regionManager);
 
@@ -344,7 +372,53 @@ int main()
       processInput(window, player, deltaTime);
       player.update(deltaTime, chunkManager);
 
-      glClearColor(0.0f, 1.0f, 1.0f, 0.7f);
+      if (autoTimeProgression)
+      {
+        worldTime += deltaTime / dayLength;
+        if (worldTime > 1.0f) worldTime -= 1.0f;
+      }
+
+      float sunAngle = worldTime * 2.0f * 3.14159265f;
+      float sunHeight = sin(sunAngle);
+      float rawSunBrightness = glm::clamp(sunHeight * 2.0f + 0.3f, 0.0f, 1.0f);
+      float moonLight = 0.25f;
+      float sunBrightness = glm::max(rawSunBrightness, moonLight);
+      float ambientLight = glm::mix(0.15f, 0.25f, rawSunBrightness);
+
+      glm::vec3 dayColor(0.53f, 0.81f, 0.92f);
+      glm::vec3 sunsetColor(1.0f, 0.55f, 0.3f);
+      glm::vec3 nightColor(0.05f, 0.07f, 0.15f);
+
+      glm::vec3 skyColor;
+      if (sunHeight > 0.1f)
+      {
+        skyColor = dayColor;
+      }
+      else if (sunHeight > -0.1f)
+      {
+        float t = (sunHeight + 0.1f) / 0.2f;
+        skyColor = glm::mix(sunsetColor, dayColor, t);
+      }
+      else
+      {
+        float t = glm::clamp((sunHeight + 0.1f) / 0.3f + 1.0f, 0.0f, 1.0f);
+        skyColor = glm::mix(nightColor, sunsetColor, t);
+      }
+
+      glm::vec3 fogCol = glm::mix(skyColor * 0.8f, skyColor, 0.5f);
+
+      if (discoMode)
+      {
+        float t = static_cast<float>(glfwGetTime()) * discoSpeed;
+        float r = (sin(t) + 1.0f) * 0.5f;
+        float g = (sin(t * 1.3f + 2.094f) + 1.0f) * 0.5f;
+        float b = (sin(t * 0.7f + 4.188f) + 1.0f) * 0.5f;
+        glClearColor(r, g, b, 1.0f);
+      }
+      else
+      {
+        glClearColor(skyColor.r, skyColor.g, skyColor.b, 1.0f);
+      }
       glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
       shaderProgram.Activate();
@@ -365,10 +439,29 @@ int main()
 
       glm::mat4 model = glm::mat4(1.0f);
 
-      // Create a temporary Camera struct for CameraForward
-      Camera cam{player.getEyePosition(), player.yaw, player.pitch, fov};
-      glm::vec3 camForward = CameraForward(cam);
+      float effectYaw = player.yaw;
+      float effectPitch = player.pitch;
       glm::vec3 eyePos = player.getEyePosition();
+
+      if (drunkMode)
+      {
+        float t = static_cast<float>(glfwGetTime());
+        effectYaw += sin(t * 2.0f) * 3.0f * drunkIntensity;
+        effectPitch += sin(t * 1.7f) * 2.0f * drunkIntensity;
+        effectYaw += sin(t * 0.5f) * 8.0f * drunkIntensity;
+        eyePos.y += sin(t * 3.0f) * 0.1f * drunkIntensity;
+      }
+
+      if (earthquakeMode)
+      {
+        float t = static_cast<float>(glfwGetTime()) * 50.0f;
+        eyePos.x += (sin(t * 1.1f) + sin(t * 2.3f) * 0.5f) * earthquakeIntensity;
+        eyePos.y += (sin(t * 1.7f) + sin(t * 3.1f) * 0.5f) * earthquakeIntensity;
+        eyePos.z += (sin(t * 1.3f) + sin(t * 2.7f) * 0.5f) * earthquakeIntensity;
+      }
+
+      Camera cam{eyePos, effectYaw, effectPitch, fov};
+      glm::vec3 camForward = CameraForward(cam);
       glm::mat4 view = glm::lookAt(
           eyePos,
           eyePos + camForward,
@@ -379,6 +472,13 @@ int main()
 
       glm::mat4 mvp = proj * view * model;
       glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(mvp));
+      glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+      glUniform1f(timeOfDayLoc, sunBrightness);
+      glUniform3fv(cameraPosLoc, 1, glm::value_ptr(eyePos));
+      glUniform3fv(skyColorLoc, 1, glm::value_ptr(skyColor));
+      glUniform3fv(fogColorLoc, 1, glm::value_ptr(fogCol));
+      glUniform1f(fogDensityLoc, fogDensity);
+      glUniform1f(ambientLightLoc, ambientLight);
 
       int cx = floor(player.position.x / CHUNK_SIZE);
       int cz = floor(player.position.z / CHUNK_SIZE);
@@ -486,6 +586,7 @@ int main()
           glm::mat4 chunkModel = glm::translate(glm::mat4(1.0f), glm::vec3(chunk->position.x * CHUNK_SIZE, chunk->position.y * CHUNK_SIZE, chunk->position.z * CHUNK_SIZE));
           glm::mat4 chunkMVP = proj * view * chunkModel;
           glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(chunkMVP));
+          glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(chunkModel));
 
           glBindVertexArray(chunk->vao);
           glDrawElements(GL_TRIANGLES, chunk->indexCount, GL_UNSIGNED_INT, 0);
@@ -565,7 +666,7 @@ int main()
 
         ImGui::Separator();
         
-        const char* blockNames[] = {"Air", "Dirt", "Grass", "Stone", "Sand", "Oak Log", "Oak Leaves"};
+        const char* blockNames[] = {"Air", "Dirt", "Grass", "Stone", "Sand", "Oak Log", "Oak Leaves", "Glass", "Oak Planks"};
         uint8_t selectedBlockId = PLACEABLE_BLOCKS[selectedBlockIndex];
         ImGui::Text("Selected: %s (ID: %d)", blockNames[selectedBlockId], selectedBlockId);
         ImGui::Text("Scroll wheel to change block");
@@ -590,6 +691,60 @@ int main()
         ImGui::Text("Chunks loading: %zu", chunkManager.loadingChunks.size());
         ImGui::Text("Chunks meshing: %zu", chunkManager.meshingChunks.size());
         ImGui::Text("Jobs pending: %zu", jobSystem.pendingJobCount());
+
+        ImGui::Separator();
+        ImGui::Text("DAY/NIGHT CYCLE");
+        ImGui::Checkbox("Auto Time", &autoTimeProgression);
+        ImGui::SliderFloat("Time of Day", &worldTime, 0.0f, 1.0f, "%.2f");
+        ImGui::SliderFloat("Day Length (s)", &dayLength, 60.0f, 1200.0f);
+        ImGui::SliderFloat("Fog Density", &fogDensity, 0.001f, 0.05f, "%.4f");
+        
+        const char* timeNames[] = {"Midnight", "Dawn", "Morning", "Noon", "Afternoon", "Dusk", "Evening", "Night"};
+        int timeIndex = static_cast<int>(worldTime * 8.0f) % 8;
+        ImGui::Text("Current: %s (Sun: %.0f%%)", timeNames[timeIndex], rawSunBrightness * 100.0f);
+
+        ImGui::End();
+
+        ImGui::Begin("Fun Bullshit", nullptr, debugFlags);
+        
+        if (ImGui::Button("Randomize Block Textures"))
+        {
+          randomizeBlockTextures();
+          for (auto& pair : chunkManager.chunks)
+          {
+            pair.second->dirtyMesh = true;
+          }
+        }
+        
+        if (ImGui::Button("Reset Block Textures"))
+        {
+          resetBlockTextures();
+          for (auto& pair : chunkManager.chunks)
+          {
+            pair.second->dirtyMesh = true;
+          }
+        }
+
+        ImGui::Separator();
+        ImGui::Text("VISUAL CHAOS");
+
+        ImGui::Checkbox("Drunk Mode", &drunkMode);
+        if (drunkMode)
+        {
+          ImGui::SliderFloat("Drunk Intensity", &drunkIntensity, 0.1f, 5.0f);
+        }
+
+        ImGui::Checkbox("Disco Mode", &discoMode);
+        if (discoMode)
+        {
+          ImGui::SliderFloat("Disco Speed", &discoSpeed, 1.0f, 50.0f);
+        }
+
+        ImGui::Checkbox("Earthquake", &earthquakeMode);
+        if (earthquakeMode)
+        {
+          ImGui::SliderFloat("Quake Intensity", &earthquakeIntensity, 0.05f, 2.0f);
+        }
 
         ImGui::End();
       }
@@ -627,6 +782,15 @@ int main()
 
     jobSystem.stop();
     std::cout << "Job system stopped" << std::endl;
+
+    PlayerData playerToSave;
+    playerToSave.x = player.position.x;
+    playerToSave.y = player.position.y;
+    playerToSave.z = player.position.z;
+    playerToSave.yaw = player.yaw;
+    playerToSave.pitch = player.pitch;
+    regionManager.savePlayerData(playerToSave);
+    std::cout << "Player position saved" << std::endl;
 
     for (auto &pair : chunkManager.chunks)
     {

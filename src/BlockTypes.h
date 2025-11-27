@@ -17,8 +17,11 @@ struct BlockType
 };
 
 extern std::array<BlockType, 256> g_blockTypes;
+extern std::array<BlockType, 256> g_defaultBlockTypes;
 
 void initBlockTypes();
+void randomizeBlockTextures();
+void resetBlockTextures();
 
 // Convert tile index + local UV (0-1) to atlas UV
 inline glm::vec2 atlasUV(int tileIndex, float localU, float localV)

@@ -305,3 +305,25 @@ void RegionManager::flush()
     }
 }
 
+bool RegionManager::loadPlayerData(PlayerData& outData)
+{
+    std::string path = worldPath + "/player.dat";
+    std::ifstream file(path, std::ios::binary);
+    if (!file.is_open())
+        return false;
+
+    file.read(reinterpret_cast<char*>(&outData), sizeof(PlayerData));
+    return file.good();
+}
+
+void RegionManager::savePlayerData(const PlayerData& data)
+{
+    fs::create_directories(worldPath);
+    std::string path = worldPath + "/player.dat";
+    std::ofstream file(path, std::ios::binary | std::ios::trunc);
+    if (file.is_open())
+    {
+        file.write(reinterpret_cast<const char*>(&data), sizeof(PlayerData));
+    }
+}
+
