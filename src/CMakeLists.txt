@@ -1,4 +1,3 @@
-# === Sources for your app ===
 set(SOURCES
     main.cpp
     VBO.cpp
@@ -16,8 +15,25 @@ set(SOURCES
     JobSystem.cpp
 )
 
-# === Create the executable FIRST ===
 add_executable(VoxelEngine ${SOURCES})
+
+set(SHADER_FILES
+    ${CMAKE_CURRENT_SOURCE_DIR}/default.vert
+    ${CMAKE_CURRENT_SOURCE_DIR}/default.frag
+    ${CMAKE_CURRENT_SOURCE_DIR}/selection.vert
+    ${CMAKE_CURRENT_SOURCE_DIR}/selection.frag
+)
+
+add_custom_command(TARGET VoxelEngine POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:VoxelEngine>/shaders"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SHADER_FILES} "$<TARGET_FILE_DIR:VoxelEngine>/shaders/"
+)
+
+add_custom_command(TARGET VoxelEngine POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/assets"
+        "$<TARGET_FILE_DIR:VoxelEngine>/assets"
+)
 
 # === ZLIB ===
 include(FetchContent)

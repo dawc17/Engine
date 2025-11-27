@@ -447,6 +447,13 @@ void ChunkManager::update()
   {
     onMeshComplete(job.get());
   }
+
+  auto completedSaves = jobSystem->pollCompletedSaves();
+  for (auto& job : completedSaves)
+  {
+    ChunkCoord key{job->cx, job->cy, job->cz};
+    savingChunks.erase(key);
+  }
 }
 
 void ChunkManager::onGenerateComplete(GenerateChunkJob* job)

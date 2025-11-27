@@ -1,6 +1,32 @@
 #include"ShaderClass.h"
 
-// Reads a text file and outputs a string with everything in the text file
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#else
+#include <unistd.h>
+#include <limits.h>
+#endif
+
+std::filesystem::path getExecutableDir()
+{
+	namespace fs = std::filesystem;
+#ifdef _WIN32
+	wchar_t path[MAX_PATH];
+	GetModuleFileNameW(NULL, path, MAX_PATH);
+	return fs::path(path).parent_path();
+#else
+	char path[PATH_MAX];
+	ssize_t len = readlink("/proc/self/exe", path, sizeof(path) - 1);
+	if (len != -1)
+	{
+		path[len] = '\0';
+		return fs::path(path).parent_path();
+	}
+	return fs::current_path();
+#endif
+}
+
 std::string get_file_contents(const char* filename)
 {
 	namespace fs = std::filesystem;
@@ -21,12 +47,22 @@ std::string get_file_contents(const char* filename)
 		return read_stream(in);
 	}
 
+	fs::path exeDir = getExecutableDir();
+	fs::path shadersPath = exeDir / "shaders" / filename;
+	in.open(shadersPath, std::ios::binary);
+	if (in)
+	{
+		return read_stream(in);
+	}
+
+#ifdef SHADER_DIR
 	fs::path fallback = fs::path(SHADER_DIR) / filename;
 	in.open(fallback, std::ios::binary);
 	if (in)
 	{
 		return read_stream(in);
 	}
+#endif
 
 	throw std::runtime_error("Failed to open shader file: " + fs::path(filename).string());
 }

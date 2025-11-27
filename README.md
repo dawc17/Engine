@@ -37,8 +37,24 @@ If you already have GLFW installed, set `-DGLFW_FETCH=OFF` and ensure CMake can 
 ```bash
 ./build/src/VoxelEngine
 ```
-- Running from the repo root or `build/` works for both shaders and the atlas thanks to `SHADER_DIR` and the relative texture lookup in `src/main.cpp`.
 - Release builds on Windows land at `build\src\Release\VoxelEngine.exe`; Debug builds live in `build\src\Debug\VoxelEngine.exe`.
+- Shaders and assets are automatically copied to the build output directory.
+
+## Distribution
+The `build/src/Release/` folder is self-contained and ready to distribute:
+```
+Release/
+├── VoxelEngine.exe
+├── shaders/
+│   ├── default.vert
+│   ├── default.frag
+│   ├── selection.vert
+│   └── selection.frag
+└── assets/
+    └── textures/
+        └── blocks.png
+```
+Zip up the `Release/` folder and share it. Saves will be created in a `saves/` folder next to the executable.
 
 ## Controls
 - `W/A/S/D`: walk/fly the player depending on noclip state

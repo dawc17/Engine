@@ -259,10 +259,18 @@ std::vector<std::unique_ptr<MeshChunkJob>> JobSystem::pollCompletedMeshes()
     return result;
 }
 
+std::vector<std::unique_ptr<SaveChunkJob>> JobSystem::pollCompletedSaves()
+{
+    std::lock_guard<std::mutex> lock(completedMutex);
+    std::vector<std::unique_ptr<SaveChunkJob>> result;
+    result.swap(completedSaves);
+    return result;
+}
+
 bool JobSystem::hasCompletedWork() const
 {
     std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(completedMutex));
-    return !completedGenerations.empty() || !completedMeshes.empty();
+    return !completedGenerations.empty() || !completedMeshes.empty() || !completedSaves.empty();
 }
 
 size_t JobSystem::pendingJobCount() const
@@ -332,6 +340,12 @@ void JobSystem::processJob(std::unique_ptr<Job> job)
 
         case JobType::Save:
             processSaveJob(static_cast<SaveChunkJob*>(job.get()));
+            {
+                std::lock_guard<std::mutex> lock(completedMutex);
+                completedSaves.push_back(
+                    std::unique_ptr<SaveChunkJob>(static_cast<SaveChunkJob*>(job.release()))
+                );
+            }
             break;
     }
 }

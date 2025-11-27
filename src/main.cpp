@@ -1,3 +1,11 @@
+#ifdef _WIN32
+#define NOMINMAX
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <mmsystem.h>
+#pragma comment(lib, "winmm.lib")
+#endif
+
 #include "../libs/imgui/backends/imgui_impl_glfw.h"
 #include "../libs/imgui/backends/imgui_impl_opengl3.h"
 #include "../libs/imgui/imgui.h"
@@ -28,6 +36,37 @@
 #include <string>
 #include <vector>
 #include <thread>
+#include <chrono>
+
+using FrameClock = std::chrono::high_resolution_clock;
+using FrameDuration = std::chrono::duration<double>;
+static FrameClock::time_point lastFrameTime = FrameClock::now();
+
+void limitFPS(int targetFPS)
+{
+    using namespace std::chrono;
+    
+    auto frameDuration = duration<double>(1.0 / targetFPS);
+    auto now = FrameClock::now();
+    auto elapsed = now - lastFrameTime;
+
+    if (elapsed < frameDuration)
+    {
+        auto remaining = frameDuration - elapsed;
+
+        if (remaining > milliseconds(2))
+        {
+            std::this_thread::sleep_for(remaining - milliseconds(2));
+        }
+
+        while (FrameClock::now() - lastFrameTime < frameDuration)
+        {
+            std::this_thread::yield();
+        }
+    }
+
+    lastFrameTime = FrameClock::now();
+}
 
 void framebuffer_size_callback(GLFWwindow *window, int width, int height);
 void processInput(GLFWwindow *window, Player &player, float dt);
@@ -41,6 +80,7 @@ const float MAX_RAYCAST_DISTANCE = 8.0f;
 
 float fps = 0.0f;
 float cameraSpeed = 5.5f;
+int targetFps = 144;
 
 bool mouseLocked = true;
 bool firstMouse = true;
@@ -60,6 +100,10 @@ int main()
 {
   try
   {
+#ifdef _WIN32
+    timeBeginPeriod(1);
+#endif
+
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
@@ -77,8 +121,8 @@ int main()
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
     gladLoadGL();
+    glfwSwapInterval(0);
 
-    // Enable depth testing
     glEnable(GL_DEPTH_TEST);
 
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
@@ -242,7 +286,7 @@ int main()
     chunkManager.setJobSystem(&jobSystem);
     jobSystem.setChunkManager(&chunkManager);
 
-    int numWorkers = std::max(2, static_cast<int>(std::thread::hardware_concurrency()) - 1);
+    int numWorkers = (std::max)(2, static_cast<int>(std::thread::hardware_concurrency()) - 1);
     jobSystem.start(numWorkers);
     std::cout << "Started job system with " << numWorkers << " worker threads" << std::endl;
 
@@ -356,7 +400,8 @@ int main()
             int chunkZ = cz + dz;
 
             if (!chunkManager.hasChunk(chunkX, cy, chunkZ) && 
-                !chunkManager.isLoading(chunkX, cy, chunkZ))
+                !chunkManager.isLoading(chunkX, cy, chunkZ) &&
+                !chunkManager.isSaving(chunkX, cy, chunkZ))
             {
               if (useAsyncLoading)
               {
@@ -397,14 +442,43 @@ int main()
         }
       }
 
-      // render chunks
       for (auto &pair : chunkManager.chunks)
       {
         Chunk *chunk = pair.second.get();
         if (chunk->dirtyMesh)
         {
-          buildChunkMesh(*chunk, chunkManager);
-          chunk->dirtyMesh = false;
+          bool neighborsReady = true;
+          if (useAsyncLoading)
+          {
+            const int neighborOffsets[6][3] = {
+              {1, 0, 0}, {-1, 0, 0},
+              {0, 1, 0}, {0, -1, 0},
+              {0, 0, 1}, {0, 0, -1}
+            };
+            for (const auto& offset : neighborOffsets)
+            {
+              int nx = chunk->position.x + offset[0];
+              int ny = chunk->position.y + offset[1];
+              int nz = chunk->position.z + offset[2];
+              if (ny >= CHUNK_HEIGHT_MIN && ny <= CHUNK_HEIGHT_MAX)
+              {
+                if (!chunkManager.hasChunk(nx, ny, nz))
+                {
+                  if (chunkManager.isLoading(nx, ny, nz))
+                  {
+                    neighborsReady = false;
+                    break;
+                  }
+                }
+              }
+            }
+          }
+          
+          if (neighborsReady)
+          {
+            buildChunkMesh(*chunk, chunkManager);
+            chunk->dirtyMesh = false;
+          }
         }
 
         if (chunk->indexCount > 0)
@@ -507,6 +581,11 @@ int main()
         ImGui::SliderFloat("Move Speed", &cameraSpeed, 0.0f, 20.0f);
 
         ImGui::Separator();
+        ImGui::InputInt("Max FPS", &targetFps);
+        if (targetFps < 10) targetFps = 10;
+        if (targetFps > 1000) targetFps = 1000;
+
+        ImGui::Separator();
         ImGui::Text("Chunks loaded: %zu", chunkManager.chunks.size());
         ImGui::Text("Chunks loading: %zu", chunkManager.loadingChunks.size());
         ImGui::Text("Chunks meshing: %zu", chunkManager.meshingChunks.size());
@@ -537,6 +616,12 @@ int main()
       ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
       glfwSwapBuffers(window);
+
+      if (targetFps < 1000)
+      {
+        limitFPS(targetFps);
+      }
+
       glfwPollEvents();
     }
 
@@ -566,11 +651,19 @@ int main()
 
     glfwDestroyWindow(window);
     glfwTerminate();
+
+#ifdef _WIN32
+    timeEndPeriod(1);
+#endif
+
     return 0;
   }
   catch (const std::exception &ex)
   {
     std::cerr << "Fatal error: " << ex.what() << std::endl;
+#ifdef _WIN32
+    timeEndPeriod(1);
+#endif
     return EXIT_FAILURE;
   }
 }
@@ -659,10 +752,18 @@ void processInput(GLFWwindow *window, Player &player, float dt)
 std::string resolveTexturePath(const std::string &relativePath)
 {
   namespace fs = std::filesystem;
+  
   fs::path direct(relativePath);
   if (fs::exists(direct))
   {
     return direct.string();
+  }
+
+  fs::path exeDir = getExecutableDir();
+  fs::path fromExe = exeDir / relativePath;
+  if (fs::exists(fromExe))
+  {
+    return fromExe.string();
   }
 
   fs::path fromBuild = fs::path("..") / relativePath;

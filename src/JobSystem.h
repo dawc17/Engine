@@ -93,6 +93,7 @@ public:
 
     std::vector<std::unique_ptr<GenerateChunkJob>> pollCompletedGenerations();
     std::vector<std::unique_ptr<MeshChunkJob>> pollCompletedMeshes();
+    std::vector<std::unique_ptr<SaveChunkJob>> pollCompletedSaves();
 
     bool hasCompletedWork() const;
     size_t pendingJobCount() const;
@@ -107,6 +108,7 @@ private:
 
     std::vector<std::unique_ptr<GenerateChunkJob>> completedGenerations;
     std::vector<std::unique_ptr<MeshChunkJob>> completedMeshes;
+    std::vector<std::unique_ptr<SaveChunkJob>> completedSaves;
     std::mutex completedMutex;
 
     RegionManager* regionManager;
