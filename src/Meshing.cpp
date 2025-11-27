@@ -476,3 +476,161 @@ void uploadToGPU(Chunk &c, const std::vector<Vertex> &verts, const std::vector<u
   c.indexCount = inds.size();
   c.vertexCount = verts.size();
 }
+
+void buildChunkMeshOffThread(
+    const BlockID* blocks,
+    BlockGetter getBlock,
+    std::vector<Vertex>& outVertices,
+    std::vector<uint32_t>& outIndices)
+{
+  outVertices.clear();
+  outIndices.clear();
+  outVertices.reserve(CHUNK_VOLUME * 6 * 4);
+  outIndices.reserve(CHUNK_VOLUME * 6 * 6);
+
+  for (int dir = 0; dir < 6; dir++)
+  {
+    glm::ivec3 n = DIRS[dir];
+    int axis = 0;
+    if (n.y != 0) axis = 1;
+    if (n.z != 0) axis = 2;
+
+    int u = (axis + 1) % 3;
+    int v = (axis + 2) % 3;
+
+    BlockID mask[CHUNK_SIZE][CHUNK_SIZE];
+
+    for (int i = 0; i < CHUNK_SIZE; i++)
+    {
+      for (int j = 0; j < CHUNK_SIZE; j++)
+      {
+        for (int k = 0; k < CHUNK_SIZE; k++)
+        {
+          glm::ivec3 pos;
+          pos[axis] = i;
+          pos[u] = k;
+          pos[v] = j;
+
+          BlockID current = blocks[blockIndex(pos.x, pos.y, pos.z)];
+
+          glm::ivec3 npos = pos + n;
+          BlockID neighbor = getBlock(npos.x, npos.y, npos.z);
+
+          bool showFace = false;
+          if (current != 0)
+          {
+            if (neighbor == 0)
+            {
+              showFace = true;
+            }
+            else if (g_blockTypes[neighbor].transparent)
+            {
+              if (current != neighbor)
+              {
+                showFace = true;
+              }
+            }
+          }
+
+          mask[j][k] = showFace ? current : 0;
+        }
+      }
+
+      for (int j = 0; j < CHUNK_SIZE; j++)
+      {
+        for (int k = 0; k < CHUNK_SIZE; k++)
+        {
+          if (mask[j][k] != 0)
+          {
+            BlockID type = mask[j][k];
+            int w = 1;
+            int h = 1;
+
+            while (k + w < CHUNK_SIZE && mask[j][k + w] == type)
+              w++;
+
+            bool done = false;
+            while (j + h < CHUNK_SIZE)
+            {
+              for (int dx = 0; dx < w; dx++)
+              {
+                if (mask[j + h][k + dx] != type)
+                {
+                  done = true;
+                  break;
+                }
+              }
+              if (done) break;
+              h++;
+            }
+
+            const Vertex *face = FACE_TABLE[dir];
+            uint32_t baseIndex = outVertices.size();
+
+            int tileIndex = g_blockTypes[type].faceTexture[dir];
+            int rotation = g_blockTypes[type].faceRotation[dir];
+
+            float faceShade = FACE_SHADE[dir];
+
+            int axisOffset = (n[axis] > 0) ? 1 : 0;
+
+            for (int vIdx = 0; vIdx < 4; vIdx++)
+            {
+              Vertex vtx = face[vIdx];
+              glm::vec3 finalPos;
+
+              finalPos[axis] = i + axisOffset;
+
+              if (vtx.uv.x > 0.5f) finalPos[u] = k + w;
+              else finalPos[u] = k;
+
+              if (vtx.uv.y > 0.5f) finalPos[v] = j + h;
+              else finalPos[v] = j;
+
+              vtx.pos = finalPos;
+
+              float localU = (vtx.uv.x > 0.5f) ? static_cast<float>(w) : 0.0f;
+              float localV = (vtx.uv.y > 0.5f) ? static_cast<float>(h) : 0.0f;
+
+              switch (rotation)
+              {
+                case 1:
+                  {
+                    float tmp = localU;
+                    localU = localV;
+                    localV = static_cast<float>(w) - tmp;
+                  }
+                  break;
+                case 2:
+                  localV = static_cast<float>(h) - localV;
+                  break;
+                case 3:
+                  {
+                    float tmp = localU;
+                    localU = static_cast<float>(h) - localV;
+                    localV = tmp;
+                  }
+                  break;
+                default:
+                  break;
+              }
+
+              vtx.uv = glm::vec2(localU, localV);
+              vtx.tileIndex = static_cast<float>(tileIndex);
+              vtx.light = faceShade;
+
+              outVertices.push_back(vtx);
+            }
+
+            for (int idx = 0; idx < 6; idx++)
+              outIndices.push_back(baseIndex + FACE_INDICES[idx]);
+
+            for (int dy = 0; dy < h; dy++)
+              for (int dx = 0; dx < w; dx++)
+                mask[j + dy][k + dx] = 0;
+          }
+        }
+      }
+    }
+  }
+}

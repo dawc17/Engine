@@ -1,0 +1,100 @@
+#pragma once
+#include "Chunk.h"
+#include <cstdint>
+#include <string>
+#include <unordered_map>
+#include <mutex>
+#include <fstream>
+#include <vector>
+#include <memory>
+
+constexpr int REGION_SIZE = 32;
+constexpr int REGION_SHIFT = 5;
+constexpr int REGION_MASK = REGION_SIZE - 1;
+constexpr int HEADER_ENTRIES = REGION_SIZE * REGION_SIZE;
+constexpr int HEADER_SIZE = HEADER_ENTRIES * 8;
+constexpr int SECTOR_SIZE = 4096;
+
+struct RegionCoord
+{
+    int x;
+    int z;
+
+    bool operator==(const RegionCoord& other) const noexcept
+    {
+        return x == other.x && z == other.z;
+    }
+};
+
+struct RegionCoordHash
+{
+    std::size_t operator()(const RegionCoord& coord) const noexcept
+    {
+        std::size_t h = std::hash<int>{}(coord.x);
+        h ^= std::hash<int>{}(coord.z) + 0x9e3779b9 + (h << 6) + (h >> 2);
+        return h;
+    }
+};
+
+struct ColumnEntry
+{
+    uint32_t offset;
+    uint32_t size;
+};
+
+struct SectionData
+{
+    int8_t y;
+    std::vector<uint8_t> compressedBlocks;
+};
+
+struct ColumnData
+{
+    std::vector<SectionData> sections;
+};
+
+class RegionFile
+{
+public:
+    RegionFile(const std::string& path);
+    ~RegionFile();
+
+    bool loadColumn(int localX, int localZ, ColumnData& outData);
+    void saveColumn(int localX, int localZ, const ColumnData& data);
+    void flush();
+
+private:
+    std::string filePath;
+    std::fstream file;
+    ColumnEntry header[HEADER_ENTRIES];
+    bool headerDirty;
+    std::mutex mutex;
+
+    int getEntryIndex(int localX, int localZ) const;
+    void readHeader();
+    void writeHeader();
+    uint32_t allocateSectors(uint32_t numBytes);
+};
+
+class RegionManager
+{
+public:
+    RegionManager(const std::string& worldPath = "saves/world");
+    ~RegionManager();
+
+    bool loadChunkData(int cx, int cy, int cz, BlockID* outBlocks);
+    void saveChunkData(int cx, int cy, int cz, const BlockID* blocks);
+    void flush();
+
+private:
+    std::string worldPath;
+    std::unordered_map<RegionCoord, std::unique_ptr<RegionFile>, RegionCoordHash> regions;
+    std::mutex regionsMutex;
+
+    RegionFile* getOrOpenRegion(int regX, int regZ);
+    std::string getRegionPath(int regX, int regZ) const;
+
+    static void compressBlocks(const BlockID* blocks, std::vector<uint8_t>& outCompressed);
+    static bool decompressBlocks(const std::vector<uint8_t>& compressed, BlockID* outBlocks);
+};
+

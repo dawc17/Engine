@@ -12,10 +12,23 @@ set(SOURCES
     BlockTypes.cpp
     Raycast.cpp
     Player.cpp
+    RegionManager.cpp
+    JobSystem.cpp
 )
 
 # === Create the executable FIRST ===
 add_executable(VoxelEngine ${SOURCES})
+
+# === ZLIB ===
+include(FetchContent)
+FetchContent_Declare(
+    zlib
+    GIT_REPOSITORY https://github.com/madler/zlib.git
+    GIT_TAG v1.3.1
+)
+set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(zlib)
+target_include_directories(VoxelEngine PRIVATE ${zlib_SOURCE_DIR} ${zlib_BINARY_DIR})
 
 # === GLAD ===
 set(GLAD_DIR ../libs/glad)
@@ -87,9 +100,9 @@ endif()
 target_link_libraries(VoxelEngine PRIVATE glm::glm)
 
 if (WIN32)
-    target_link_libraries(VoxelEngine PRIVATE glad ${GLFW_TARGET} imgui opengl32)
+    target_link_libraries(VoxelEngine PRIVATE glad ${GLFW_TARGET} imgui opengl32 zlibstatic)
     target_link_libraries(imgui PRIVATE ${GLFW_TARGET})
 else()
-    target_link_libraries(VoxelEngine PRIVATE glad ${GLFW_TARGET} GL imgui)
+    target_link_libraries(VoxelEngine PRIVATE glad ${GLFW_TARGET} GL imgui zlibstatic)
     target_link_libraries(imgui PRIVATE ${GLFW_TARGET})
 endif()

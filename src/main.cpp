@@ -9,23 +9,25 @@
 #include "BlockTypes.h"
 #include "Raycast.h"
 #include "Player.h"
+#include "JobSystem.h"
+#include "RegionManager.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
+#include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <algorithm>
 #include <cstdlib>
 #include <exception>
 #include <filesystem>
-#include <glad/glad.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <iostream>
 #include <string>
-#include <tuple>
 #include <vector>
+#include <thread>
 
 void framebuffer_size_callback(GLFWwindow *window, int width, int height);
 void processInput(GLFWwindow *window, Player &player, float dt);
@@ -44,6 +46,7 @@ bool mouseLocked = true;
 bool firstMouse = true;
 double lastMouseX = SCREEN_WIDTH / 2.0;
 double lastMouseY = SCREEN_HEIGHT / 2.0;
+bool showDebugMenu = true;
 
 // Global pointers for mouse callback
 Player* g_player = nullptr;
@@ -223,15 +226,26 @@ int main()
     ImGui_ImplOpenGL3_Init("#version 460");
 
     bool wireframeMode = false;
+    bool useAsyncLoading = true;
 
     Player player;
     float fov = 70.0f;
 
     float lastFrame = 0.0f;
 
-    ChunkManager chunkManager;
+    RegionManager regionManager("saves/world");
+    JobSystem jobSystem;
+    jobSystem.setRegionManager(&regionManager);
 
-    // Set up global pointers for mouse callback
+    ChunkManager chunkManager;
+    chunkManager.setRegionManager(&regionManager);
+    chunkManager.setJobSystem(&jobSystem);
+    jobSystem.setChunkManager(&chunkManager);
+
+    int numWorkers = std::max(2, static_cast<int>(std::thread::hardware_concurrency()) - 1);
+    jobSystem.start(numWorkers);
+    std::cout << "Started job system with " << numWorkers << " worker threads" << std::endl;
+
     g_player = &player;
     g_chunkManager = &chunkManager;
 
@@ -286,7 +300,7 @@ int main()
       processInput(window, player, deltaTime);
       player.update(deltaTime, chunkManager);
 
-      glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+      glClearColor(0.0f, 1.0f, 1.0f, 0.7f);
       glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
       shaderProgram.Activate();
@@ -300,12 +314,6 @@ int main()
       ImGui_ImplOpenGL3_NewFrame();
       ImGui_ImplGlfw_NewFrame();
       ImGui::NewFrame();
-
-      // When mouse is locked for gameplay, prevent ImGui from capturing mouse input
-      if (mouseLocked)
-      {
-        ImGui::GetIO().WantCaptureMouse = false;
-      }
 
       glfwGetFramebufferSize(window, &fbWidth, &fbHeight);
       if (fbHeight == 0)
@@ -333,10 +341,11 @@ int main()
 
       const int LOAD_RADIUS = 4;
       const int UNLOAD_RADIUS = LOAD_RADIUS + 2;
-      const int CHUNK_HEIGHT_MIN = 0;   // Lowest chunk Y layer
-      const int CHUNK_HEIGHT_MAX = 4;   // Highest chunk Y layer (supports terrain up to Y=80)
+      const int CHUNK_HEIGHT_MIN = 0;
+      const int CHUNK_HEIGHT_MAX = 4;
 
-      // Load chunks within radius (including vertical layers)
+      chunkManager.update();
+
       for (int dx = -LOAD_RADIUS; dx <= LOAD_RADIUS; dx++)
       {
         for (int dz = -LOAD_RADIUS; dz <= LOAD_RADIUS; dz++)
@@ -346,15 +355,22 @@ int main()
             int chunkX = cx + dx;
             int chunkZ = cz + dz;
 
-            if (!chunkManager.hasChunk(chunkX, cy, chunkZ))
+            if (!chunkManager.hasChunk(chunkX, cy, chunkZ) && 
+                !chunkManager.isLoading(chunkX, cy, chunkZ))
             {
-              chunkManager.loadChunk(chunkX, cy, chunkZ);
+              if (useAsyncLoading)
+              {
+                chunkManager.enqueueLoadChunk(chunkX, cy, chunkZ);
+              }
+              else
+              {
+                chunkManager.loadChunk(chunkX, cy, chunkZ);
+              }
             }
           }
         }
       }
 
-      // unload chunks outside unload radius
       std::vector<ChunkManager::ChunkCoord> toUnload;
       for (auto &pair : chunkManager.chunks)
       {
@@ -363,12 +379,22 @@ int main()
         int distZ = chunk->position.z - cz;
         if (std::abs(distX) > UNLOAD_RADIUS || std::abs(distZ) > UNLOAD_RADIUS)
         {
-          toUnload.push_back({chunk->position.x, chunk->position.y, chunk->position.z});
+          if (!chunkManager.isSaving(chunk->position.x, chunk->position.y, chunk->position.z))
+          {
+            toUnload.push_back({chunk->position.x, chunk->position.y, chunk->position.z});
+          }
         }
       }
       for (const auto &coord : toUnload)
       {
-        chunkManager.unloadChunk(coord.x, coord.y, coord.z);
+        if (useAsyncLoading)
+        {
+          chunkManager.enqueueSaveAndUnload(coord.x, coord.y, coord.z);
+        }
+        else
+        {
+          chunkManager.unloadChunk(coord.x, coord.y, coord.z);
+        }
       }
 
       // render chunks
@@ -424,58 +450,70 @@ int main()
           glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
       }
 
-      ImGui::Begin("Debug");
-      ImGui::Text("FPS: %.1f", fps);
-      ImGui::Text("Position: (%.2f, %.2f, %.2f)",
-                  player.position.x, player.position.y, player.position.z);
-      ImGui::Text("Velocity: (%.2f, %.2f, %.2f)",
-                  player.velocity.x, player.velocity.y, player.velocity.z);
-      ImGui::Text("Yaw: %.1f, Pitch: %.1f", player.yaw, player.pitch);
-      ImGui::Text("On Ground: %s", player.onGround ? "Yes" : "No");
-
-      int chunkX = static_cast<int>(floor(player.position.x / 16.0f));
-      int chunkZ = static_cast<int>(floor(player.position.z / 16.0f));
-      ImGui::Text("Chunk: (%d, %d)", chunkX, chunkZ);
-
-      if (selectedBlock.has_value())
+      if (showDebugMenu)
       {
+        ImGuiWindowFlags debugFlags = 0;
+        if (mouseLocked)
+          debugFlags |= ImGuiWindowFlags_NoInputs;
+        ImGui::Begin("Debug", nullptr, debugFlags);
+        ImGui::Text("FPS: %.1f", fps);
+        ImGui::Text("Position: (%.2f, %.2f, %.2f)",
+                    player.position.x, player.position.y, player.position.z);
+        ImGui::Text("Velocity: (%.2f, %.2f, %.2f)",
+                    player.velocity.x, player.velocity.y, player.velocity.z);
+        ImGui::Text("Yaw: %.1f, Pitch: %.1f", player.yaw, player.pitch);
+        ImGui::Text("On Ground: %s", player.onGround ? "Yes" : "No");
+
+        int chunkX = static_cast<int>(floor(player.position.x / 16.0f));
+        int chunkZ = static_cast<int>(floor(player.position.z / 16.0f));
+        ImGui::Text("Chunk: (%d, %d)", chunkX, chunkZ);
+
+        if (selectedBlock.has_value())
+        {
+          ImGui::Separator();
+          ImGui::Text("Selected Block: (%d, %d, %d)", 
+              selectedBlock->blockPos.x, 
+              selectedBlock->blockPos.y, 
+              selectedBlock->blockPos.z);
+          uint8_t blockId = getBlockAtWorld(
+              selectedBlock->blockPos.x, 
+              selectedBlock->blockPos.y, 
+              selectedBlock->blockPos.z, 
+              chunkManager);
+          ImGui::Text("Block ID: %d", blockId);
+          ImGui::Text("Distance: %.2f", selectedBlock->distance);
+        }
+        else
+        {
+          ImGui::Separator();
+          ImGui::Text("No block selected");
+        }
+
         ImGui::Separator();
-        ImGui::Text("Selected Block: (%d, %d, %d)", 
-            selectedBlock->blockPos.x, 
-            selectedBlock->blockPos.y, 
-            selectedBlock->blockPos.z);
-        uint8_t blockId = getBlockAtWorld(
-            selectedBlock->blockPos.x, 
-            selectedBlock->blockPos.y, 
-            selectedBlock->blockPos.z, 
-            chunkManager);
-        ImGui::Text("Block ID: %d", blockId);
-        ImGui::Text("Distance: %.2f", selectedBlock->distance);
-      }
-      else
-      {
+        
+        const char* blockNames[] = {"Air", "Dirt", "Grass", "Stone", "Sand", "Oak Log", "Oak Leaves"};
+        uint8_t selectedBlockId = PLACEABLE_BLOCKS[selectedBlockIndex];
+        ImGui::Text("Selected: %s (ID: %d)", blockNames[selectedBlockId], selectedBlockId);
+        ImGui::Text("Scroll wheel to change block");
+        
         ImGui::Separator();
-        ImGui::Text("No block selected");
+        ImGui::Text("LMB: Break block");
+        ImGui::Text("RMB: Place block");
+        ImGui::Text("Space: Jump");
+
+        ImGui::Checkbox("Wireframe mode", &wireframeMode);
+        ImGui::Checkbox("Noclip mode", &player.noclip);
+        ImGui::Checkbox("Async Loading", &useAsyncLoading);
+        ImGui::SliderFloat("Move Speed", &cameraSpeed, 0.0f, 20.0f);
+
+        ImGui::Separator();
+        ImGui::Text("Chunks loaded: %zu", chunkManager.chunks.size());
+        ImGui::Text("Chunks loading: %zu", chunkManager.loadingChunks.size());
+        ImGui::Text("Chunks meshing: %zu", chunkManager.meshingChunks.size());
+        ImGui::Text("Jobs pending: %zu", jobSystem.pendingJobCount());
+
+        ImGui::End();
       }
-
-      ImGui::Separator();
-      
-      // Block names for display
-      const char* blockNames[] = {"Air", "Dirt", "Grass", "Stone", "Sand", "Oak Log", "Oak Leaves"};
-      uint8_t selectedBlockId = PLACEABLE_BLOCKS[selectedBlockIndex];
-      ImGui::Text("Selected: %s (ID: %d)", blockNames[selectedBlockId], selectedBlockId);
-      ImGui::Text("Scroll wheel to change block");
-      
-      ImGui::Separator();
-      ImGui::Text("LMB: Break block");
-      ImGui::Text("RMB: Place block");
-      ImGui::Text("Space: Jump");
-
-      ImGui::Checkbox("Wireframe mode", &wireframeMode);
-      ImGui::Checkbox("Noclip mode", &player.noclip);
-      ImGui::SliderFloat("Move Speed", &cameraSpeed, 0.0f, 20.0f);
-
-      ImGui::End();
 
       // Draw crosshair in the center of the screen
       ImDrawList* drawList = ImGui::GetForegroundDrawList();
@@ -502,10 +540,19 @@ int main()
       glfwPollEvents();
     }
 
-    // Release GPU resources for chunks before the OpenGL context is torn down.
+    jobSystem.stop();
+    std::cout << "Job system stopped" << std::endl;
+
+    for (auto &pair : chunkManager.chunks)
+    {
+      Chunk* chunk = pair.second.get();
+      regionManager.saveChunkData(chunk->position.x, chunk->position.y, chunk->position.z, chunk->blocks);
+    }
+    regionManager.flush();
+    std::cout << "World saved" << std::endl;
+
     chunkManager.chunks.clear();
     
-    // Clean up selection highlight resources
     glDeleteVertexArrays(1, &selectionVAO);
     glDeleteBuffers(1, &selectionVBO);
     glDeleteBuffers(1, &selectionEBO);
@@ -561,6 +608,20 @@ void processInput(GLFWwindow *window, Player &player, float dt)
   else
   {
     uKeyPressed = false;
+  }
+
+  static bool tabPressed = false;
+  if (glfwGetKey(window, GLFW_KEY_TAB) == GLFW_PRESS)
+  {
+    if (!tabPressed)
+    {
+      showDebugMenu = !showDebugMenu;
+      tabPressed = true;
+    }
+  }
+  else
+  {
+    tabPressed = false;
   }
 
   // Build input direction from WASD keys

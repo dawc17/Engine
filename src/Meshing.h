@@ -2,6 +2,7 @@
 #include "Chunk.h"
 #include "ChunkManager.h"
 #include <vector>
+#include <functional>
 #include <glm/glm.hpp>
 
 struct Vertex
@@ -38,3 +39,11 @@ void calculateSkyLight(Chunk &c, ChunkManager &chunkManager);
 
 void buildChunkMesh(Chunk &c, ChunkManager &chunkManager);
 void uploadToGPU(Chunk &c, const std::vector<Vertex> &verts, const std::vector<uint32_t> &inds);
+
+using BlockGetter = std::function<BlockID(int x, int y, int z)>;
+void buildChunkMeshOffThread(
+    const BlockID* blocks,
+    BlockGetter getBlock,
+    std::vector<Vertex>& outVertices,
+    std::vector<uint32_t>& outIndices
+);
