@@ -72,4 +72,5 @@ struct ChunkManager
 
 private:
   void copyNeighborFace(BlockID* dest, Chunk* neighbor, int face);
+  void copyNeighborSkyLightFace(uint8_t* dest, Chunk* neighbor, int face);
 };

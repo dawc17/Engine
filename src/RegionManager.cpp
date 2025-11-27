@@ -146,8 +146,6 @@ void RegionFile::saveColumn(int localX, int localZ, const ColumnData& data)
     header[idx].offset = offset;
     header[idx].size = totalSize;
     headerDirty = true;
-
-    writeHeader();
 }
 
 void RegionFile::flush()

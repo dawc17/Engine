@@ -4,7 +4,8 @@
 #include <cmath>
 #include <algorithm>
 
-// AABB implementation
+static thread_local std::vector<AABB> s_collisionScratch;
+
 bool AABB::intersects(const AABB& other) const
 {
   return (min.x < other.max.x && max.x > other.min.x) &&
@@ -20,9 +21,8 @@ AABB AABB::fromBlockPos(int x, int y, int z)
   return aabb;
 }
 
-// Player implementation
 Player::Player()
-    : position(0.0f, 70.0f, 0.0f)  // Start high above terrain, will fall to ground
+    : position(0.0f, 70.0f, 0.0f)
     , velocity(0.0f)
     , yaw(-90.0f)
     , pitch(0.0f)
@@ -62,7 +62,6 @@ void Player::applyMovement(const glm::vec3& inputDir, float speed)
     velocity.x = normalizedInput.x * speed;
     velocity.z = normalizedInput.z * speed;
     
-    // Handle Y velocity for noclip mode
     if (noclip)
     {
       velocity.y = normalizedInput.y * speed;
@@ -89,19 +88,16 @@ void Player::jump()
   }
 }
 
-// Check if a block at world position is solid
 static bool isBlockSolid(int wx, int wy, int wz, ChunkManager& chunkManager)
 {
   uint8_t blockId = getBlockAtWorld(wx, wy, wz, chunkManager);
-  return blockId != 0;  // 0 = air
+  return blockId != 0;
 }
 
-// Get all block AABBs that might collide with the player AABB
-static std::vector<AABB> getCollidingBlocks(const AABB& playerAABB, ChunkManager& chunkManager)
+static void getCollidingBlocks(const AABB& playerAABB, ChunkManager& chunkManager, std::vector<AABB>& outBlocks)
 {
-  std::vector<AABB> blocks;
+  outBlocks.clear();
   
-  // Expand search area by 1 block in each direction
   int minX = static_cast<int>(std::floor(playerAABB.min.x));
   int minY = static_cast<int>(std::floor(playerAABB.min.y));
   int minZ = static_cast<int>(std::floor(playerAABB.min.z));
@@ -117,21 +113,17 @@ static std::vector<AABB> getCollidingBlocks(const AABB& playerAABB, ChunkManager
       {
         if (isBlockSolid(x, y, z, chunkManager))
         {
-          blocks.push_back(AABB::fromBlockPos(x, y, z));
+          outBlocks.push_back(AABB::fromBlockPos(x, y, z));
         }
       }
     }
   }
-  
-  return blocks;
 }
 
-// Swept AABB collision: move player along one axis and resolve collisions
-// Returns the actual movement that occurred
 static float moveAxis(
     glm::vec3& position,
     float movement,
-    int axis,  // 0=X, 1=Y, 2=Z
+    int axis,
     ChunkManager& chunkManager,
     bool& hitSomething)
 {
@@ -143,7 +135,6 @@ static float moveAxis(
   float halfWidth = PLAYER_WIDTH * 0.5f;
   float halfDepth = PLAYER_DEPTH * 0.5f;
   
-  // Create AABB at new position
   glm::vec3 newPos = position;
   newPos[axis] += movement;
   
@@ -157,19 +148,16 @@ static float moveAxis(
       newPos.y + PLAYER_HEIGHT,
       newPos.z + halfDepth);
   
-  // Check for collisions
-  std::vector<AABB> blocks = getCollidingBlocks(newAABB, chunkManager);
+  getCollidingBlocks(newAABB, chunkManager, s_collisionScratch);
   
-  for (const AABB& block : blocks)
+  for (const AABB& block : s_collisionScratch)
   {
     if (newAABB.intersects(block))
     {
       hitSomething = true;
       
-      // Resolve collision by pushing player out
       if (movement > 0)
       {
-        // Moving in positive direction, push back to block's min face
         if (axis == 0)
           newPos.x = block.min.x - halfWidth - 0.0001f;
         else if (axis == 1)
@@ -179,7 +167,6 @@ static float moveAxis(
       }
       else
       {
-        // Moving in negative direction, push forward to block's max face
         if (axis == 0)
           newPos.x = block.max.x + halfWidth + 0.0001f;
         else if (axis == 1)
@@ -188,7 +175,6 @@ static float moveAxis(
           newPos.z = block.max.z + halfDepth + 0.0001f;
       }
       
-      // Recalculate AABB after adjustment
       newAABB.min = glm::vec3(
           newPos.x - halfWidth,
           newPos.y,
@@ -209,27 +195,21 @@ void Player::update(float dt, ChunkManager& chunkManager)
 {
   if (noclip)
   {
-    // Noclip mode: just move without collision
     position += velocity * dt;
     return;
   }
   
-  // Apply gravity
   velocity.y -= GRAVITY * dt;
   
-  // Clamp to terminal velocity
   if (velocity.y < -TERMINAL_VELOCITY)
     velocity.y = -TERMINAL_VELOCITY;
   
-  // Calculate movement this frame
   glm::vec3 movement = velocity * dt;
   
-  // Move along each axis separately (Y first for ground detection)
   bool hitY = false;
   bool hitX = false;
   bool hitZ = false;
   
-  // Move Y axis first
   moveAxis(position, movement.y, 1, chunkManager, hitY);
   if (hitY)
   {
@@ -244,14 +224,12 @@ void Player::update(float dt, ChunkManager& chunkManager)
     onGround = false;
   }
   
-  // Move X axis
   moveAxis(position, movement.x, 0, chunkManager, hitX);
   if (hitX)
   {
     velocity.x = 0.0f;
   }
   
-  // Move Z axis
   moveAxis(position, movement.z, 2, chunkManager, hitZ);
   if (hitZ)
   {
@@ -273,4 +251,3 @@ glm::vec3 playerRightXZ(const Player& player)
   glm::vec3 forward = playerForwardXZ(player);
   return glm::normalize(glm::cross(forward, glm::vec3(0.0f, 1.0f, 0.0f)));
 }
-

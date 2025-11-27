@@ -546,30 +546,27 @@ int main()
       for (auto &pair : chunkManager.chunks)
       {
         Chunk *chunk = pair.second.get();
-        if (chunk->dirtyMesh)
+        if (chunk->dirtyMesh && !chunkManager.isMeshing(chunk->position.x, chunk->position.y, chunk->position.z))
         {
           bool neighborsReady = true;
-          if (useAsyncLoading)
+          const int neighborOffsets[6][3] = {
+            {1, 0, 0}, {-1, 0, 0},
+            {0, 1, 0}, {0, -1, 0},
+            {0, 0, 1}, {0, 0, -1}
+          };
+          for (const auto& offset : neighborOffsets)
           {
-            const int neighborOffsets[6][3] = {
-              {1, 0, 0}, {-1, 0, 0},
-              {0, 1, 0}, {0, -1, 0},
-              {0, 0, 1}, {0, 0, -1}
-            };
-            for (const auto& offset : neighborOffsets)
+            int nx = chunk->position.x + offset[0];
+            int ny = chunk->position.y + offset[1];
+            int nz = chunk->position.z + offset[2];
+            if (ny >= CHUNK_HEIGHT_MIN && ny <= CHUNK_HEIGHT_MAX)
             {
-              int nx = chunk->position.x + offset[0];
-              int ny = chunk->position.y + offset[1];
-              int nz = chunk->position.z + offset[2];
-              if (ny >= CHUNK_HEIGHT_MIN && ny <= CHUNK_HEIGHT_MAX)
+              if (!chunkManager.hasChunk(nx, ny, nz))
               {
-                if (!chunkManager.hasChunk(nx, ny, nz))
+                if (chunkManager.isLoading(nx, ny, nz))
                 {
-                  if (chunkManager.isLoading(nx, ny, nz))
-                  {
-                    neighborsReady = false;
-                    break;
-                  }
+                  neighborsReady = false;
+                  break;
                 }
               }
             }
@@ -577,8 +574,15 @@ int main()
           
           if (neighborsReady)
           {
-            buildChunkMesh(*chunk, chunkManager);
-            chunk->dirtyMesh = false;
+            if (useAsyncLoading)
+            {
+              chunkManager.enqueueMeshChunk(chunk->position.x, chunk->position.y, chunk->position.z);
+            }
+            else
+            {
+              buildChunkMesh(*chunk, chunkManager);
+              chunk->dirtyMesh = false;
+            }
           }
         }
 

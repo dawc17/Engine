@@ -42,9 +42,13 @@ void buildChunkMesh(Chunk &c, ChunkManager &chunkManager);
 void uploadToGPU(Chunk &c, const std::vector<Vertex> &verts, const std::vector<uint32_t> &inds);
 
 using BlockGetter = std::function<BlockID(int x, int y, int z)>;
+using LightGetter = std::function<uint8_t(int x, int y, int z)>;
+
 void buildChunkMeshOffThread(
     const BlockID* blocks,
+    const uint8_t* skyLight,
     BlockGetter getBlock,
+    LightGetter getSkyLight,
     std::vector<Vertex>& outVertices,
     std::vector<uint32_t>& outIndices
 );

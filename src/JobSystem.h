@@ -52,6 +52,14 @@ struct MeshChunkJob : Job
     bool hasNeighborPosY, hasNeighborNegY;
     bool hasNeighborPosZ, hasNeighborNegZ;
 
+    uint8_t skyLight[CHUNK_VOLUME];
+    uint8_t skyLightPosX[CHUNK_SIZE * CHUNK_SIZE];
+    uint8_t skyLightNegX[CHUNK_SIZE * CHUNK_SIZE];
+    uint8_t skyLightPosY[CHUNK_SIZE * CHUNK_SIZE];
+    uint8_t skyLightNegY[CHUNK_SIZE * CHUNK_SIZE];
+    uint8_t skyLightPosZ[CHUNK_SIZE * CHUNK_SIZE];
+    uint8_t skyLightNegZ[CHUNK_SIZE * CHUNK_SIZE];
+
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
 

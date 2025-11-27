@@ -13,6 +13,7 @@ set(SOURCES
     Player.cpp
     RegionManager.cpp
     JobSystem.cpp
+    TerrainGenerator.cpp
 )
 
 add_executable(VoxelEngine ${SOURCES})

@@ -1,187 +1,8 @@
 #include "JobSystem.h"
 #include "ChunkManager.h"
-#include "BlockTypes.h"
-#include "PerlinNoise.hpp"
-#include <cmath>
+#include "TerrainGenerator.h"
 #include <cstring>
 #include <algorithm>
-
-static const siv::PerlinNoise::seed_type TERRAIN_SEED = 1488;
-static const siv::PerlinNoise perlinJob{TERRAIN_SEED};
-static const siv::PerlinNoise perlinDetailJob{TERRAIN_SEED + 1};
-static const siv::PerlinNoise perlinTreesJob{TERRAIN_SEED + 2};
-
-constexpr int BASE_HEIGHT = 32;
-constexpr int HEIGHT_VARIATION = 28;
-constexpr int DIRT_DEPTH = 5;
-constexpr int TREE_TRUNK_HEIGHT = 5;
-constexpr int TREE_LEAF_RADIUS = 2;
-
-constexpr uint8_t BLOCK_AIR = 0;
-constexpr uint8_t BLOCK_DIRT = 1;
-constexpr uint8_t BLOCK_GRASS = 2;
-constexpr uint8_t BLOCK_STONE = 3;
-constexpr uint8_t BLOCK_LOG = 5;
-constexpr uint8_t BLOCK_LEAVES = 6;
-
-constexpr int TREE_GRID_SIZE = 7;
-constexpr int TREE_OFFSET_RANGE = 10;
-constexpr float TREE_SPAWN_CHANCE = 0.2f;
-
-static bool shouldPlaceTreeJob(int worldX, int worldZ)
-{
-    int cellX = worldX >= 0 ? worldX / TREE_GRID_SIZE : (worldX - TREE_GRID_SIZE + 1) / TREE_GRID_SIZE;
-    int cellZ = worldZ >= 0 ? worldZ / TREE_GRID_SIZE : (worldZ - TREE_GRID_SIZE + 1) / TREE_GRID_SIZE;
-
-    unsigned int cellHash = static_cast<unsigned int>(cellX * 73856093) ^
-                            static_cast<unsigned int>(cellZ * 19349663);
-
-    float spawnChance = (cellHash % 10000) / 10000.0f;
-    if (spawnChance >= TREE_SPAWN_CHANCE)
-        return false;
-
-    unsigned int offsetHash = cellHash * 31337;
-    int offsetX = static_cast<int>(offsetHash % TREE_OFFSET_RANGE);
-    int offsetZ = static_cast<int>((offsetHash / TREE_OFFSET_RANGE) % TREE_OFFSET_RANGE);
-
-    int treePosX = cellX * TREE_GRID_SIZE + offsetX;
-    int treePosZ = cellZ * TREE_GRID_SIZE + offsetZ;
-
-    return worldX == treePosX && worldZ == treePosZ;
-}
-
-static double getTerrainHeightJob(float worldX, float worldZ)
-{
-    double continentNoise = perlinJob.octave2D_01(
-        worldX * 0.002,
-        worldZ * 0.002,
-        2,
-        0.5
-    );
-
-    continentNoise = std::pow(continentNoise, 1.2);
-
-    double hillNoise = perlinJob.octave2D_01(
-        worldX * 0.01,
-        worldZ * 0.01,
-        4,
-        0.45
-    );
-
-    double detailNoise = perlinDetailJob.octave2D_01(
-        worldX * 0.05,
-        worldZ * 0.05,
-        2,
-        0.5
-    );
-
-    double blendedNoise = continentNoise * 0.4 + hillNoise * 0.5 + detailNoise * 0.1;
-    blendedNoise = blendedNoise * blendedNoise * (3.0 - 2.0 * blendedNoise);
-
-    return BASE_HEIGHT + blendedNoise * HEIGHT_VARIATION;
-}
-
-static void setBlockIfInChunkJob(BlockID* blocks, int localX, int localY, int localZ, uint8_t blockId, bool overwriteSolid = false)
-{
-    if (localX < 0 || localX >= CHUNK_SIZE ||
-        localY < 0 || localY >= CHUNK_SIZE ||
-        localZ < 0 || localZ >= CHUNK_SIZE)
-        return;
-
-    int idx = blockIndex(localX, localY, localZ);
-    if (overwriteSolid || blocks[idx] == BLOCK_AIR)
-    {
-        blocks[idx] = blockId;
-    }
-}
-
-static void generateTerrainJob(BlockID* blocks, int cx, int cy, int cz)
-{
-    int worldOffsetX = cx * CHUNK_SIZE;
-    int worldOffsetY = cy * CHUNK_SIZE;
-    int worldOffsetZ = cz * CHUNK_SIZE;
-
-    for (int x = 0; x < CHUNK_SIZE; x++)
-    {
-        for (int z = 0; z < CHUNK_SIZE; z++)
-        {
-            float worldX = static_cast<float>(worldOffsetX + x);
-            float worldZ = static_cast<float>(worldOffsetZ + z);
-
-            int terrainHeight = static_cast<int>(std::round(getTerrainHeightJob(worldX, worldZ)));
-
-            for (int y = 0; y < CHUNK_SIZE; y++)
-            {
-                int worldY = worldOffsetY + y;
-                int i = blockIndex(x, y, z);
-
-                if (worldY > terrainHeight)
-                {
-                    blocks[i] = BLOCK_AIR;
-                }
-                else if (worldY == terrainHeight)
-                {
-                    blocks[i] = BLOCK_GRASS;
-                }
-                else if (worldY > terrainHeight - DIRT_DEPTH)
-                {
-                    blocks[i] = BLOCK_DIRT;
-                }
-                else
-                {
-                    blocks[i] = BLOCK_STONE;
-                }
-            }
-        }
-    }
-
-    for (int x = -TREE_LEAF_RADIUS; x < CHUNK_SIZE + TREE_LEAF_RADIUS; x++)
-    {
-        for (int z = -TREE_LEAF_RADIUS; z < CHUNK_SIZE + TREE_LEAF_RADIUS; z++)
-        {
-            int worldX = worldOffsetX + x;
-            int worldZ = worldOffsetZ + z;
-
-            if (!shouldPlaceTreeJob(worldX, worldZ))
-                continue;
-
-            int terrainHeight = static_cast<int>(std::round(getTerrainHeightJob(
-                static_cast<float>(worldX), static_cast<float>(worldZ))));
-
-            int treeBaseY = terrainHeight + 1;
-
-            for (int ty = 0; ty < TREE_TRUNK_HEIGHT; ty++)
-            {
-                int localX = x;
-                int localY = treeBaseY + ty - worldOffsetY;
-                int localZ = z;
-                setBlockIfInChunkJob(blocks, localX, localY, localZ, BLOCK_LOG, true);
-            }
-
-            int leafCenterY = treeBaseY + TREE_TRUNK_HEIGHT - 1;
-            for (int lx = -TREE_LEAF_RADIUS; lx <= TREE_LEAF_RADIUS; lx++)
-            {
-                for (int ly = -1; ly <= TREE_LEAF_RADIUS; ly++)
-                {
-                    for (int lz = -TREE_LEAF_RADIUS; lz <= TREE_LEAF_RADIUS; lz++)
-                    {
-                        int dist = std::abs(lx) + std::abs(ly) + std::abs(lz);
-                        if (dist > TREE_LEAF_RADIUS + 1)
-                            continue;
-
-                        if (lx == 0 && lz == 0 && ly < TREE_LEAF_RADIUS)
-                            continue;
-
-                        int localX = x + lx;
-                        int localY = leafCenterY + ly - worldOffsetY;
-                        int localZ = z + lz;
-                        setBlockIfInChunkJob(blocks, localX, localY, localZ, BLOCK_LEAVES);
-                    }
-                }
-            }
-        }
-    }
-}
 
 JobSystem::JobSystem()
     : running(false), regionManager(nullptr), chunkManager(nullptr)
@@ -361,7 +182,7 @@ void JobSystem::processGenerateJob(GenerateChunkJob* job)
     }
     else
     {
-        generateTerrainJob(job->blocks, job->cx, job->cy, job->cz);
+        generateTerrain(job->blocks, job->cx, job->cy, job->cz);
         job->loadedFromDisk = false;
     }
 }
@@ -423,7 +244,62 @@ void JobSystem::processMeshJob(MeshChunkJob* job)
         return 0;
     };
 
-    buildChunkMeshOffThread(job->blocks, getBlock, job->vertices, job->indices);
+    auto getSkyLight = [job](int x, int y, int z) -> uint8_t
+    {
+        if (x >= 0 && x < CHUNK_SIZE &&
+            y >= 0 && y < CHUNK_SIZE &&
+            z >= 0 && z < CHUNK_SIZE)
+        {
+            return job->skyLight[blockIndex(x, y, z)];
+        }
+
+        if (x >= CHUNK_SIZE && job->hasNeighborPosX)
+        {
+            int localY = y;
+            int localZ = z;
+            if (localY >= 0 && localY < CHUNK_SIZE && localZ >= 0 && localZ < CHUNK_SIZE)
+                return job->skyLightPosX[localY * CHUNK_SIZE + localZ];
+        }
+        if (x < 0 && job->hasNeighborNegX)
+        {
+            int localY = y;
+            int localZ = z;
+            if (localY >= 0 && localY < CHUNK_SIZE && localZ >= 0 && localZ < CHUNK_SIZE)
+                return job->skyLightNegX[localY * CHUNK_SIZE + localZ];
+        }
+        if (y >= CHUNK_SIZE && job->hasNeighborPosY)
+        {
+            int localX = x;
+            int localZ = z;
+            if (localX >= 0 && localX < CHUNK_SIZE && localZ >= 0 && localZ < CHUNK_SIZE)
+                return job->skyLightPosY[localX * CHUNK_SIZE + localZ];
+        }
+        if (y < 0 && job->hasNeighborNegY)
+        {
+            int localX = x;
+            int localZ = z;
+            if (localX >= 0 && localX < CHUNK_SIZE && localZ >= 0 && localZ < CHUNK_SIZE)
+                return job->skyLightNegY[localX * CHUNK_SIZE + localZ];
+        }
+        if (z >= CHUNK_SIZE && job->hasNeighborPosZ)
+        {
+            int localX = x;
+            int localY = y;
+            if (localX >= 0 && localX < CHUNK_SIZE && localY >= 0 && localY < CHUNK_SIZE)
+                return job->skyLightPosZ[localX * CHUNK_SIZE + localY];
+        }
+        if (z < 0 && job->hasNeighborNegZ)
+        {
+            int localX = x;
+            int localY = y;
+            if (localX >= 0 && localX < CHUNK_SIZE && localY >= 0 && localY < CHUNK_SIZE)
+                return job->skyLightNegZ[localX * CHUNK_SIZE + localY];
+        }
+
+        return MAX_SKY_LIGHT;
+    };
+
+    buildChunkMeshOffThread(job->blocks, job->skyLight, getBlock, getSkyLight, job->vertices, job->indices);
 }
 
 void JobSystem::processSaveJob(SaveChunkJob* job)
@@ -433,4 +309,3 @@ void JobSystem::processSaveJob(SaveChunkJob* job)
         regionManager->saveChunkData(job->cx, job->cy, job->cz, job->blocks);
     }
 }
-
