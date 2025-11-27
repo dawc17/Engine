@@ -321,7 +321,11 @@ void buildChunkMesh(Chunk &c, ChunkManager &chunkManager)
             }
             else if (g_blockTypes[neighbor].transparent)
             {
-              if (current != neighbor)
+              if (current == neighbor && g_blockTypes[current].connectsToSame)
+              {
+                showFace = false;
+              }
+              else if (current != neighbor)
               {
                 showFace = true;
               }
@@ -530,7 +534,11 @@ void buildChunkMeshOffThread(
             }
             else if (g_blockTypes[neighbor].transparent)
             {
-              if (current != neighbor)
+              if (current == neighbor && g_blockTypes[current].connectsToSame)
+              {
+                showFace = false;
+              }
+              else if (current != neighbor)
               {
                 showFace = true;
               }

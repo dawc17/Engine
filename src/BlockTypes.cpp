@@ -6,15 +6,15 @@ std::array<BlockType, 256> g_defaultBlockTypes;
 
 void initBlockTypes()
 {
-    // Initialize all blocks as air (non-solid, transparent)
     for (auto &block : g_blockTypes)
     {
         block.solid = false;
-        block.transparent = true;  // Air is transparent
+        block.transparent = true;
+        block.connectsToSame = false;
         for (int i = 0; i < 6; i++)
         {
             block.faceTexture[i] = 0;
-            block.faceRotation[i] = 0; // default: no rotation
+            block.faceRotation[i] = 0;
         }
     }
 
@@ -97,12 +97,13 @@ void initBlockTypes()
         g_blockTypes[6].faceRotation[i] = 0;
     }
 
-    // Block 7: Glass (transparent, solid)
+    // Block 7: Glass (transparent for light, but connects to same type like Minecraft)
     g_blockTypes[7].solid = true;
     g_blockTypes[7].transparent = true;
+    g_blockTypes[7].connectsToSame = true;
     for (int i = 0; i < 6; i++)
     {
-        g_blockTypes[7].faceTexture[i] = 264;
+        g_blockTypes[7].faceTexture[i] = 205;
         g_blockTypes[7].faceRotation[i] = 0;
     }
 
@@ -111,7 +112,7 @@ void initBlockTypes()
     g_blockTypes[8].transparent = false;
     for (int i = 0; i < 6; i++)
     {
-        g_blockTypes[8].faceTexture[i] = 266;
+        g_blockTypes[8].faceTexture[i] = 392;
         g_blockTypes[8].faceRotation[i] = 0;
     }
     g_blockTypes[8].faceRotation[0] = 1;

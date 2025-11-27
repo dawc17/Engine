@@ -10,10 +10,11 @@ constexpr float TILE_V = 1.0f / ATLAS_TILES_Y;
 
 struct BlockType
 {
-    int faceTexture[6];  // tile index for +X -X +Y -Y +Z -Z
-    int faceRotation[6]; // rotation for each face: 0=0°, 1=90°, 2=180°, 3=270° (CCW)
-    bool solid;          // blocks movement/collision
-    bool transparent;    // can see through (don't cull faces adjacent to this block)
+    int faceTexture[6];
+    int faceRotation[6];
+    bool solid;
+    bool transparent;
+    bool connectsToSame;
 };
 
 extern std::array<BlockType, 256> g_blockTypes;

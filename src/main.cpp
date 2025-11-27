@@ -304,6 +304,7 @@ int main()
       player.position = glm::vec3(savedPlayer.x, savedPlayer.y, savedPlayer.z);
       player.yaw = savedPlayer.yaw;
       player.pitch = savedPlayer.pitch;
+      worldTime = savedPlayer.timeOfDay;
       std::cout << "Loaded player position: (" << savedPlayer.x << ", " << savedPlayer.y << ", " << savedPlayer.z << ")" << std::endl;
     }
     JobSystem jobSystem;
@@ -789,6 +790,7 @@ int main()
     playerToSave.z = player.position.z;
     playerToSave.yaw = player.yaw;
     playerToSave.pitch = player.pitch;
+    playerToSave.timeOfDay = worldTime;
     regionManager.savePlayerData(playerToSave);
     std::cout << "Player position saved" << std::endl;
 

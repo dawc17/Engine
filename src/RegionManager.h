@@ -80,6 +80,7 @@ struct PlayerData
 {
     float x, y, z;
     float yaw, pitch;
+    float timeOfDay;
 };
 
 class RegionManager
