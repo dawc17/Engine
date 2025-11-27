@@ -194,20 +194,58 @@ RegionFile* RegionManager::getOrOpenRegion(int regX, int regZ)
 
 void RegionManager::compressBlocks(const BlockID* blocks, std::vector<uint8_t>& outCompressed)
 {
-    uLongf compressedSize = compressBound(CHUNK_VOLUME);
-    outCompressed.resize(compressedSize);
+    bool allSame = true;
+    BlockID firstBlock = blocks[0];
+    for (int i = 1; i < CHUNK_VOLUME && allSame; i++)
+    {
+        if (blocks[i] != firstBlock)
+            allSame = false;
+    }
 
+    if (allSame)
+    {
+        outCompressed.resize(2);
+        outCompressed[0] = 0xFF;
+        outCompressed[1] = firstBlock;
+        return;
+    }
+
+    std::vector<uint8_t> rleBuffer;
+    rleBuffer.reserve(CHUNK_VOLUME * 2);
+
+    int i = 0;
+    while (i < CHUNK_VOLUME)
+    {
+        BlockID current = blocks[i];
+        int runLen = 1;
+        while (i + runLen < CHUNK_VOLUME && blocks[i + runLen] == current && runLen < 255)
+        {
+            runLen++;
+        }
+        rleBuffer.push_back(static_cast<uint8_t>(runLen));
+        rleBuffer.push_back(current);
+        i += runLen;
+    }
+
+    uLongf compressedSize = compressBound(static_cast<uLong>(rleBuffer.size()));
+    outCompressed.resize(compressedSize + 5);
+
+    outCompressed[0] = 0x01;
+    uint32_t rleSize = static_cast<uint32_t>(rleBuffer.size());
+    std::memcpy(&outCompressed[1], &rleSize, 4);
+
+    uLongf destLen = compressedSize;
     int result = compress2(
-        outCompressed.data(),
-        &compressedSize,
-        reinterpret_cast<const Bytef*>(blocks),
-        CHUNK_VOLUME,
-        Z_DEFAULT_COMPRESSION
+        outCompressed.data() + 5,
+        &destLen,
+        rleBuffer.data(),
+        static_cast<uLong>(rleBuffer.size()),
+        Z_BEST_COMPRESSION
     );
 
     if (result == Z_OK)
     {
-        outCompressed.resize(compressedSize);
+        outCompressed.resize(destLen + 5);
     }
     else
     {
@@ -217,8 +255,56 @@ void RegionManager::compressBlocks(const BlockID* blocks, std::vector<uint8_t>& 
 
 bool RegionManager::decompressBlocks(const std::vector<uint8_t>& compressed, BlockID* outBlocks)
 {
-    uLongf destLen = CHUNK_VOLUME;
+    if (compressed.size() < 2)
+        return false;
 
+    if (compressed[0] == 0xFF)
+    {
+        BlockID fillBlock = compressed[1];
+        std::memset(outBlocks, fillBlock, CHUNK_VOLUME);
+        return true;
+    }
+
+    if (compressed[0] == 0x01 && compressed.size() >= 5)
+    {
+        uint32_t rleSize;
+        std::memcpy(&rleSize, &compressed[1], 4);
+
+        std::vector<uint8_t> rleBuffer(rleSize);
+        uLongf destLen = rleSize;
+
+        int result = uncompress(
+            rleBuffer.data(),
+            &destLen,
+            compressed.data() + 5,
+            static_cast<uLong>(compressed.size() - 5)
+        );
+
+        if (result != Z_OK || destLen != rleSize)
+            return false;
+
+        int outIdx = 0;
+        size_t i = 0;
+        while (i + 1 < rleBuffer.size() && outIdx < CHUNK_VOLUME)
+        {
+            uint8_t runLen = rleBuffer[i];
+            BlockID block = rleBuffer[i + 1];
+            for (int j = 0; j < runLen && outIdx < CHUNK_VOLUME; j++)
+            {
+                outBlocks[outIdx++] = block;
+            }
+            i += 2;
+        }
+
+        while (outIdx < CHUNK_VOLUME)
+        {
+            outBlocks[outIdx++] = 0;
+        }
+
+        return true;
+    }
+
+    uLongf destLen = CHUNK_VOLUME;
     int result = uncompress(
         reinterpret_cast<Bytef*>(outBlocks),
         &destLen,
