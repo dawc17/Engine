@@ -2,7 +2,7 @@
 #include <filesystem>
 #include <cstring>
 #include <algorithm>
-#include <zlib.h>
+#include "../libs/zlib-1.3.1/zlib.h"
 
 namespace fs = std::filesystem;
 

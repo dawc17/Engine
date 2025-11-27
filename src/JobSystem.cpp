@@ -6,7 +6,7 @@
 #include <cstring>
 #include <algorithm>
 
-static const siv::PerlinNoise::seed_type TERRAIN_SEED = 69420;
+static const siv::PerlinNoise::seed_type TERRAIN_SEED = 1488;
 static const siv::PerlinNoise perlinJob{TERRAIN_SEED};
 static const siv::PerlinNoise perlinDetailJob{TERRAIN_SEED + 1};
 static const siv::PerlinNoise perlinTreesJob{TERRAIN_SEED + 2};
