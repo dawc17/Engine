@@ -17,8 +17,9 @@ uniform mat4 model;
 void main()
 {
    vec3 pos = aPos;
-   // Push water slightly down so its top surface sits below adjacent blocks
-   pos.y -= 0.05;
+   // Lower only the top surface a little so water sits beneath land without sinking the whole prism
+   if (pos.y > 0.5)
+      pos.y -= 0.05;
    
    vec4 worldPosition = model * vec4(pos, 1.0);
    WorldPos = worldPosition.xyz;
