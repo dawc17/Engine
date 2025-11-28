@@ -104,7 +104,7 @@ int renderDistance = 4;
 
 bool enableCaustics = true;
 bool isUnderwater = false;
-const int SEA_LEVEL = 38;
+const int SEA_LEVEL = 116;
 
 // Global pointers for mouse callback
 Player* g_player = nullptr;
@@ -586,7 +586,7 @@ int main()
       const int LOAD_RADIUS = renderDistance;
       const int UNLOAD_RADIUS = LOAD_RADIUS + 2;
       const int CHUNK_HEIGHT_MIN = 0;
-      const int CHUNK_HEIGHT_MAX = 4;
+      const int CHUNK_HEIGHT_MAX = (256 / CHUNK_SIZE) - 1;
 
       chunkManager.update();
 

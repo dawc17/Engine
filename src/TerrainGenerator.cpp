@@ -2,12 +2,12 @@
 #include "PerlinNoise.hpp"
 #include <cmath>
 
-static const siv::PerlinNoise::seed_type TERRAIN_SEED = 1488;
+static const siv::PerlinNoise::seed_type TERRAIN_SEED = 6767420;
 static const siv::PerlinNoise perlin{TERRAIN_SEED};
 static const siv::PerlinNoise perlinDetail{TERRAIN_SEED + 1};
 static const siv::PerlinNoise perlinTrees{TERRAIN_SEED + 2};
 
-constexpr int BASE_HEIGHT = 24;
+constexpr int BASE_HEIGHT = 100;
 constexpr int HEIGHT_VARIATION = 40;
 constexpr int DIRT_DEPTH = 5;
 constexpr int TREE_TRUNK_HEIGHT = 5;
@@ -22,7 +22,7 @@ constexpr uint8_t BLOCK_LOG = 5;
 constexpr uint8_t BLOCK_LEAVES = 6;
 constexpr uint8_t BLOCK_WATER = 9;
 
-constexpr int SEA_LEVEL = 38;
+constexpr int SEA_LEVEL = 116;
 
 constexpr int TREE_GRID_SIZE = 7;
 constexpr int TREE_OFFSET_RANGE = 10;
@@ -230,4 +230,3 @@ void getTerrainHeightsForChunk(int cx, int cz, int* outHeights)
         }
     }
 }
-
