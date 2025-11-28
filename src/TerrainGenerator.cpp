@@ -7,8 +7,8 @@ static const siv::PerlinNoise perlin{TERRAIN_SEED};
 static const siv::PerlinNoise perlinDetail{TERRAIN_SEED + 1};
 static const siv::PerlinNoise perlinTrees{TERRAIN_SEED + 2};
 
-constexpr int BASE_HEIGHT = 32;
-constexpr int HEIGHT_VARIATION = 28;
+constexpr int BASE_HEIGHT = 24;
+constexpr int HEIGHT_VARIATION = 40;
 constexpr int DIRT_DEPTH = 5;
 constexpr int TREE_TRUNK_HEIGHT = 5;
 constexpr int TREE_LEAF_RADIUS = 2;
@@ -17,8 +17,12 @@ constexpr uint8_t BLOCK_AIR = 0;
 constexpr uint8_t BLOCK_DIRT = 1;
 constexpr uint8_t BLOCK_GRASS = 2;
 constexpr uint8_t BLOCK_STONE = 3;
+constexpr uint8_t BLOCK_SAND = 4;
 constexpr uint8_t BLOCK_LOG = 5;
 constexpr uint8_t BLOCK_LEAVES = 6;
+constexpr uint8_t BLOCK_WATER = 9;
+
+constexpr int SEA_LEVEL = 38;
 
 constexpr int TREE_GRID_SIZE = 7;
 constexpr int TREE_OFFSET_RANGE = 10;
@@ -113,15 +117,40 @@ void generateTerrain(BlockID* blocks, int cx, int cy, int cz)
 
                 if (worldY > terrainHeight)
                 {
-                    blocks[i] = BLOCK_AIR;
+                    if (worldY <= SEA_LEVEL)
+                    {
+                        blocks[i] = BLOCK_WATER;
+                    }
+                    else
+                    {
+                        blocks[i] = BLOCK_AIR;
+                    }
                 }
                 else if (worldY == terrainHeight)
                 {
-                    blocks[i] = BLOCK_GRASS;
+                    if (terrainHeight <= SEA_LEVEL + 2 && terrainHeight >= SEA_LEVEL - 3)
+                    {
+                        blocks[i] = BLOCK_SAND;
+                    }
+                    else if (terrainHeight > SEA_LEVEL)
+                    {
+                        blocks[i] = BLOCK_GRASS;
+                    }
+                    else
+                    {
+                        blocks[i] = BLOCK_SAND;
+                    }
                 }
                 else if (worldY > terrainHeight - DIRT_DEPTH)
                 {
-                    blocks[i] = BLOCK_DIRT;
+                    if (terrainHeight <= SEA_LEVEL + 2)
+                    {
+                        blocks[i] = BLOCK_SAND;
+                    }
+                    else
+                    {
+                        blocks[i] = BLOCK_DIRT;
+                    }
                 }
                 else
                 {
@@ -143,6 +172,9 @@ void generateTerrain(BlockID* blocks, int cx, int cy, int cz)
 
             int terrainHeight = static_cast<int>(std::round(getTerrainHeight(
                 static_cast<float>(worldX), static_cast<float>(worldZ))));
+
+            if (terrainHeight <= SEA_LEVEL + 2)
+                continue;
 
             int treeBaseY = terrainHeight + 1;
 

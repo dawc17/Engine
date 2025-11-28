@@ -17,13 +17,17 @@ struct Chunk
 
   glm::ivec3 position;
   BlockID blocks[CHUNK_VOLUME];
-  uint8_t skyLight[CHUNK_VOLUME];  // Sky light level per block (0-15)
+  uint8_t skyLight[CHUNK_VOLUME];
 
   bool dirtyMesh = true;
-  bool dirtyLight = true;  // Needs light recalculation
+  bool dirtyLight = true;
   GLuint vao = 0, vbo = 0, ebo = 0;
   uint32_t indexCount = 0;
   uint32_t vertexCount = 0;
+
+  GLuint waterVao = 0, waterVbo = 0, waterEbo = 0;
+  uint32_t waterIndexCount = 0;
+  uint32_t waterVertexCount = 0;
 };
 
 extern const glm::ivec3 DIRS[6];

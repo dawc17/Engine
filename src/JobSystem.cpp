@@ -307,7 +307,9 @@ void JobSystem::processMeshJob(MeshChunkJob* job)
         return MAX_SKY_LIGHT;
     };
 
-    buildChunkMeshOffThread(job->blocks, job->skyLight, getBlock, getSkyLight, job->vertices, job->indices);
+    buildChunkMeshOffThread(job->blocks, job->skyLight, getBlock, getSkyLight, 
+                             job->vertices, job->indices,
+                             job->waterVertices, job->waterIndices);
 }
 
 void JobSystem::processSaveJob(SaveChunkJob* job)

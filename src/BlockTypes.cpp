@@ -11,6 +11,7 @@ void initBlockTypes()
         block.solid = false;
         block.transparent = true;
         block.connectsToSame = false;
+        block.isLiquid = false;
         for (int i = 0; i < 6; i++)
         {
             block.faceTexture[i] = 0;
@@ -119,6 +120,17 @@ void initBlockTypes()
     g_blockTypes[8].faceRotation[1] = 1;
     g_blockTypes[8].faceRotation[4] = 2;
     g_blockTypes[8].faceRotation[5] = 2;
+
+    // Block 9: Water
+    g_blockTypes[9].solid = false;
+    g_blockTypes[9].transparent = true;
+    g_blockTypes[9].connectsToSame = true;
+    g_blockTypes[9].isLiquid = true;
+    for (int i = 0; i < 6; i++)
+    {
+        g_blockTypes[9].faceTexture[i] = 863;
+        g_blockTypes[9].faceRotation[i] = 0;
+    }
 
     g_defaultBlockTypes = g_blockTypes;
 }

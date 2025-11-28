@@ -1,6 +1,7 @@
 #include "Player.h"
 #include "ChunkManager.h"
 #include "Raycast.h"
+#include "BlockTypes.h"
 #include <cmath>
 #include <algorithm>
 
@@ -91,7 +92,8 @@ void Player::jump()
 static bool isBlockSolid(int wx, int wy, int wz, ChunkManager& chunkManager)
 {
   uint8_t blockId = getBlockAtWorld(wx, wy, wz, chunkManager);
-  return blockId != 0;
+  if (blockId == 0) return false;
+  return g_blockTypes[blockId].solid;
 }
 
 static void getCollidingBlocks(const AABB& playerAABB, ChunkManager& chunkManager, std::vector<AABB>& outBlocks)

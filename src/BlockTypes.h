@@ -15,6 +15,7 @@ struct BlockType
     bool solid;
     bool transparent;
     bool connectsToSame;
+    bool isLiquid;
 };
 
 extern std::array<BlockType, 256> g_blockTypes;

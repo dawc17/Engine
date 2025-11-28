@@ -27,7 +27,8 @@ static void buildGreedyMesh(
     BlockGetter getBlock,
     LightGetter getSkyLight,
     std::vector<Vertex>& outVertices,
-    std::vector<uint32_t>& outIndices)
+    std::vector<uint32_t>& outIndices,
+    bool liquidsOnly = false)
 {
   outVertices.clear();
   outIndices.clear();
@@ -59,26 +60,49 @@ static void buildGreedyMesh(
           pos[v] = j;
 
           BlockID current = blocks[blockIndex(pos.x, pos.y, pos.z)];
+          bool isCurrentLiquid = g_blockTypes[current].isLiquid;
+
+          if (liquidsOnly != isCurrentLiquid)
+          {
+            mask[j][k] = 0;
+            lightMask[j][k] = 0;
+            continue;
+          }
 
           glm::ivec3 npos = pos + n;
           BlockID neighbor = getBlock(npos.x, npos.y, npos.z);
+          bool isNeighborLiquid = g_blockTypes[neighbor].isLiquid;
 
           bool showFace = false;
           if (current != 0)
           {
-            if (neighbor == 0)
+            if (liquidsOnly)
             {
-              showFace = true;
-            }
-            else if (g_blockTypes[neighbor].transparent)
-            {
-              if (current == neighbor && g_blockTypes[current].connectsToSame)
+              if (neighbor == 0 || (!isNeighborLiquid && g_blockTypes[neighbor].transparent))
               {
-                showFace = false;
+                showFace = true;
               }
               else if (current != neighbor)
               {
                 showFace = true;
+              }
+            }
+            else
+            {
+              if (neighbor == 0)
+              {
+                showFace = true;
+              }
+              else if (g_blockTypes[neighbor].transparent)
+              {
+                if (current == neighbor && g_blockTypes[current].connectsToSame)
+                {
+                  showFace = false;
+                }
+                else if (current != neighbor)
+                {
+                  showFace = true;
+                }
               }
             }
           }
@@ -389,9 +413,14 @@ void buildChunkMesh(Chunk &c, ChunkManager &chunkManager)
 
   std::vector<Vertex> verts;
   std::vector<uint32_t> inds;
+  std::vector<Vertex> waterVerts;
+  std::vector<uint32_t> waterInds;
   
-  buildGreedyMesh(c.blocks, getBlock, getSkyLight, verts, inds);
+  buildGreedyMesh(c.blocks, getBlock, getSkyLight, verts, inds, false);
+  buildGreedyMesh(c.blocks, getBlock, getSkyLight, waterVerts, waterInds, true);
+  
   uploadToGPU(c, verts, inds);
+  uploadWaterToGPU(c, waterVerts, waterInds);
 }
 
 void uploadToGPU(Chunk &c, const std::vector<Vertex> &verts, const std::vector<uint32_t> &inds)
@@ -434,13 +463,70 @@ void uploadToGPU(Chunk &c, const std::vector<Vertex> &verts, const std::vector<u
   c.vertexCount = static_cast<uint32_t>(verts.size());
 }
 
+void uploadWaterToGPU(Chunk &c, const std::vector<Vertex> &verts, const std::vector<uint32_t> &inds)
+{
+  if (verts.empty())
+  {
+    c.waterIndexCount = 0;
+    c.waterVertexCount = 0;
+    return;
+  }
+
+  if (c.waterVao == 0)
+  {
+    glGenVertexArrays(1, &c.waterVao);
+    glGenBuffers(1, &c.waterVbo);
+    glGenBuffers(1, &c.waterEbo);
+  }
+
+  glBindVertexArray(c.waterVao);
+
+  glBindBuffer(GL_ARRAY_BUFFER, c.waterVbo);
+  glBufferData(GL_ARRAY_BUFFER,
+               verts.size() * sizeof(Vertex),
+               verts.data(),
+               GL_STATIC_DRAW);
+
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, c.waterEbo);
+  glBufferData(GL_ELEMENT_ARRAY_BUFFER,
+               inds.size() * sizeof(uint32_t),
+               inds.data(),
+               GL_STATIC_DRAW);
+
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+                        (void *)offsetof(Vertex, pos));
+  glEnableVertexAttribArray(0);
+
+  glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+                        (void *)offsetof(Vertex, uv));
+  glEnableVertexAttribArray(1);
+
+  glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+                        (void *)offsetof(Vertex, tileIndex));
+  glEnableVertexAttribArray(2);
+
+  glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+                        (void *)offsetof(Vertex, skyLight));
+  glEnableVertexAttribArray(3);
+
+  glVertexAttribPointer(4, 1, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+                        (void *)offsetof(Vertex, faceShade));
+  glEnableVertexAttribArray(4);
+
+  c.waterIndexCount = static_cast<uint32_t>(inds.size());
+  c.waterVertexCount = static_cast<uint32_t>(verts.size());
+}
+
 void buildChunkMeshOffThread(
     const BlockID* blocks,
     const uint8_t* skyLight,
     BlockGetter getBlock,
     LightGetter getSkyLight,
     std::vector<Vertex>& outVertices,
-    std::vector<uint32_t>& outIndices)
+    std::vector<uint32_t>& outIndices,
+    std::vector<Vertex>& outWaterVertices,
+    std::vector<uint32_t>& outWaterIndices)
 {
-  buildGreedyMesh(blocks, getBlock, getSkyLight, outVertices, outIndices);
+  buildGreedyMesh(blocks, getBlock, getSkyLight, outVertices, outIndices, false);
+  buildGreedyMesh(blocks, getBlock, getSkyLight, outWaterVertices, outWaterIndices, true);
 }

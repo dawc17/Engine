@@ -102,12 +102,15 @@ bool autoTimeProgression = true;
 float fogDensity = 0.008f;
 int renderDistance = 4;
 
+bool enableCaustics = true;
+bool isUnderwater = false;
+const int SEA_LEVEL = 38;
+
 // Global pointers for mouse callback
 Player* g_player = nullptr;
 ChunkManager* g_chunkManager = nullptr;
 
-// Block selection - list of placeable block IDs (skip air=0)
-const std::vector<uint8_t> PLACEABLE_BLOCKS = {1, 2, 3, 4, 5, 6, 7, 8};
+const std::vector<uint8_t> PLACEABLE_BLOCKS = {1, 2, 3, 4, 5, 6, 7, 8, 9};
 int selectedBlockIndex = 2;  // Default to stone (index 2 = block ID 3)
 
 // HUD block icons - maps block ID to OpenGL texture ID
@@ -308,10 +311,23 @@ int main()
     std::string hudIconPath = resolveTexturePath("assets/textures/hud_blocks");
     loadBlockIcons(hudIconPath);
 
-    // Selection highlight shader and geometry
     Shader selectionShader("selection.vert", "selection.frag");
     GLint selectionTransformLoc = glGetUniformLocation(selectionShader.ID, "transform");
     GLint selectionColorLoc = glGetUniformLocation(selectionShader.ID, "color");
+
+    Shader waterShader("water.vert", "water.frag");
+    waterShader.Activate();
+    glUniform1i(glGetUniformLocation(waterShader.ID, "textureArray"), 0);
+    GLint waterTransformLoc = glGetUniformLocation(waterShader.ID, "transform");
+    GLint waterModelLoc = glGetUniformLocation(waterShader.ID, "model");
+    GLint waterTimeLoc = glGetUniformLocation(waterShader.ID, "time");
+    GLint waterTimeOfDayLoc = glGetUniformLocation(waterShader.ID, "timeOfDay");
+    GLint waterCameraPosLoc = glGetUniformLocation(waterShader.ID, "cameraPos");
+    GLint waterSkyColorLoc = glGetUniformLocation(waterShader.ID, "skyColor");
+    GLint waterFogColorLoc = glGetUniformLocation(waterShader.ID, "fogColor");
+    GLint waterFogDensityLoc = glGetUniformLocation(waterShader.ID, "fogDensity");
+    GLint waterAmbientLightLoc = glGetUniformLocation(waterShader.ID, "ambientLight");
+    GLint waterEnableCausticsLoc = glGetUniformLocation(waterShader.ID, "enableCaustics");
 
     // Wireframe cube vertices (slightly larger than 1x1x1 to avoid z-fighting)
     const float s = 1.002f;  // Slight scale to avoid z-fighting
@@ -476,9 +492,23 @@ int main()
         skyColor = glm::mix(nightColor, sunsetColor, t);
       }
 
-      glm::vec3 fogCol = glm::mix(skyColor * 0.8f, skyColor, 0.5f);
+      glm::vec3 eyePos = player.getEyePosition();
 
-      if (discoMode)
+      uint8_t blockAtEye = getBlockAtWorld(
+          static_cast<int>(floor(eyePos.x)),
+          static_cast<int>(floor(eyePos.y)),
+          static_cast<int>(floor(eyePos.z)),
+          chunkManager);
+      isUnderwater = (blockAtEye == 9);
+
+      glm::vec3 underwaterFogColor = glm::vec3(0.1f, 0.3f, 0.5f);
+      float underwaterFogDensity = 0.12f;
+
+      glm::vec3 fogCol = isUnderwater ? underwaterFogColor : glm::mix(skyColor * 0.8f, skyColor, 0.5f);
+      glm::vec3 clearCol = isUnderwater ? underwaterFogColor : skyColor;
+      float effectiveFogDensity = isUnderwater ? underwaterFogDensity : fogDensity;
+
+      if (discoMode && !isUnderwater)
       {
         float t = static_cast<float>(glfwGetTime()) * discoSpeed;
         float r = (sin(t) + 1.0f) * 0.5f;
@@ -488,7 +518,7 @@ int main()
       }
       else
       {
-        glClearColor(skyColor.r, skyColor.g, skyColor.b, 1.0f);
+        glClearColor(clearCol.r, clearCol.g, clearCol.b, 1.0f);
       }
       glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -512,7 +542,6 @@ int main()
 
       float effectYaw = player.yaw;
       float effectPitch = player.pitch;
-      glm::vec3 eyePos = player.getEyePosition();
 
       if (drunkMode)
       {
@@ -546,9 +575,9 @@ int main()
       glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
       glUniform1f(timeOfDayLoc, sunBrightness);
       glUniform3fv(cameraPosLoc, 1, glm::value_ptr(eyePos));
-      glUniform3fv(skyColorLoc, 1, glm::value_ptr(skyColor));
+      glUniform3fv(skyColorLoc, 1, glm::value_ptr(clearCol));
       glUniform3fv(fogColorLoc, 1, glm::value_ptr(fogCol));
-      glUniform1f(fogDensityLoc, fogDensity);
+      glUniform1f(fogDensityLoc, effectiveFogDensity);
       glUniform1f(ambientLightLoc, ambientLight);
 
       int cx = floor(player.position.x / CHUNK_SIZE);
@@ -668,6 +697,44 @@ int main()
         }
       }
 
+      glEnable(GL_BLEND);
+      glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+      glDepthMask(GL_FALSE);
+      glEnable(GL_POLYGON_OFFSET_FILL);
+      glPolygonOffset(1.0f, 1.0f);
+
+      waterShader.Activate();
+
+      float gameTime = static_cast<float>(glfwGetTime());
+      glUniform1f(waterTimeLoc, gameTime);
+      glUniform1f(waterTimeOfDayLoc, sunBrightness);
+      glUniform3fv(waterCameraPosLoc, 1, glm::value_ptr(eyePos));
+      glUniform3fv(waterSkyColorLoc, 1, glm::value_ptr(skyColor));
+
+      glUniform3fv(waterFogColorLoc, 1, glm::value_ptr(fogCol));
+      glUniform1f(waterFogDensityLoc, effectiveFogDensity);
+      glUniform1f(waterAmbientLightLoc, ambientLight);
+      glUniform1i(waterEnableCausticsLoc, enableCaustics ? 1 : 0);
+
+      for (auto &pair : chunkManager.chunks)
+      {
+        Chunk *chunk = pair.second.get();
+        if (chunk->waterIndexCount > 0)
+        {
+          glm::mat4 chunkModel = glm::translate(glm::mat4(1.0f), glm::vec3(chunk->position.x * CHUNK_SIZE, chunk->position.y * CHUNK_SIZE, chunk->position.z * CHUNK_SIZE));
+          glm::mat4 chunkMVP = proj * view * chunkModel;
+          glUniformMatrix4fv(waterTransformLoc, 1, GL_FALSE, glm::value_ptr(chunkMVP));
+          glUniformMatrix4fv(waterModelLoc, 1, GL_FALSE, glm::value_ptr(chunkModel));
+
+          glBindVertexArray(chunk->waterVao);
+          glDrawElements(GL_TRIANGLES, chunk->waterIndexCount, GL_UNSIGNED_INT, 0);
+        }
+      }
+
+      glDepthMask(GL_TRUE);
+      glDisable(GL_BLEND);
+      glDisable(GL_POLYGON_OFFSET_FILL);
+
       // Raycast for block selection
       selectedBlock = raycastVoxel(eyePos, camForward, MAX_RAYCAST_DISTANCE, chunkManager);
 
@@ -746,7 +813,7 @@ int main()
 
             ImGui::Separator();
             
-            const char* blockNames[] = {"Air", "Dirt", "Grass", "Stone", "Sand", "Oak Log", "Oak Leaves", "Glass", "Oak Planks"};
+            const char* blockNames[] = {"Air", "Dirt", "Grass", "Stone", "Sand", "Oak Log", "Oak Leaves", "Glass", "Oak Planks", "Water"};
             uint8_t selectedBlockId = PLACEABLE_BLOCKS[selectedBlockIndex];
             ImGui::Text("Selected: %s (ID: %d)", blockNames[selectedBlockId], selectedBlockId);
             ImGui::Text("Scroll wheel to change block");
@@ -773,7 +840,7 @@ int main()
             ImGui::Checkbox("Wireframe mode", &wireframeMode);
             ImGui::Checkbox("Noclip mode", &player.noclip);
             ImGui::Checkbox("Async Loading", &useAsyncLoading);
-            ImGui::SliderFloat("Move Speed", &cameraSpeed, 0.0f, 20.0f);
+            ImGui::SliderFloat("Move Speed", &cameraSpeed, 0.0f, 60.0f);
 
             ImGui::Separator();
             ImGui::InputInt("Max FPS", &targetFps);
@@ -790,6 +857,14 @@ int main()
             const char* timeNames[] = {"Midnight", "Dawn", "Morning", "Noon", "Afternoon", "Dusk", "Evening", "Night"};
             int timeIndex = static_cast<int>(worldTime * 8.0f) % 8;
             ImGui::Text("Current: %s (Sun: %.0f%%)", timeNames[timeIndex], rawSunBrightness * 100.0f);
+
+            ImGui::Separator();
+            ImGui::Text("WATER");
+            ImGui::Checkbox("Caustics", &enableCaustics);
+            if (isUnderwater)
+            {
+              ImGui::TextColored(ImVec4(0.2f, 0.6f, 1.0f, 1.0f), "UNDERWATER");
+            }
             
             ImGui::EndTabItem();
           }
@@ -936,8 +1011,8 @@ int main()
     glDeleteBuffers(1, &selectionVBO);
     glDeleteBuffers(1, &selectionEBO);
     selectionShader.Delete();
+    waterShader.Delete();
 
-    // Cleanup HUD icons
     unloadBlockIcons();
 
     ImGui_ImplGlfw_Shutdown();

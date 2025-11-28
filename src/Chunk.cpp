@@ -25,4 +25,10 @@ Chunk::~Chunk()
     glDeleteBuffers(1, &vbo);
   if (ebo)
     glDeleteBuffers(1, &ebo);
+  if (waterVao)
+    glDeleteVertexArrays(1, &waterVao);
+  if (waterVbo)
+    glDeleteBuffers(1, &waterVbo);
+  if (waterEbo)
+    glDeleteBuffers(1, &waterEbo);
 }

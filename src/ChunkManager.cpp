@@ -382,5 +382,6 @@ void ChunkManager::onMeshComplete(MeshChunkJob* job)
     return;
 
   uploadToGPU(*chunk, job->vertices, job->indices);
+  uploadWaterToGPU(*chunk, job->waterVertices, job->waterIndices);
   chunk->dirtyMesh = false;
 }

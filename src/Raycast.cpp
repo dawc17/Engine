@@ -1,6 +1,7 @@
 #include "Raycast.h"
 #include "ChunkManager.h"
 #include "Chunk.h"
+#include "BlockTypes.h"
 #include <cmath>
 
 uint8_t getBlockAtWorld(int wx, int wy, int wz, ChunkManager& chunkManager)
@@ -127,11 +128,9 @@ std::optional<RaycastHit> raycastVoxel(
 
   while (distance < maxDistance)
   {
-    // Check current voxel
     uint8_t block = getBlockAtWorld(voxel.x, voxel.y, voxel.z, chunkManager);
-    if (block != 0)
+    if (block != 0 && g_blockTypes[block].solid)
     {
-      // Hit a solid block
       RaycastHit hit;
       hit.blockPos = voxel;
       hit.normal = lastNormal;

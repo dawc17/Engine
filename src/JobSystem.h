@@ -62,6 +62,8 @@ struct MeshChunkJob : Job
 
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
+    std::vector<Vertex> waterVertices;
+    std::vector<uint32_t> waterIndices;
 
     MeshChunkJob()
     {

@@ -24,6 +24,8 @@ set(SHADER_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/default.frag
     ${CMAKE_CURRENT_SOURCE_DIR}/selection.vert
     ${CMAKE_CURRENT_SOURCE_DIR}/selection.frag
+    ${CMAKE_CURRENT_SOURCE_DIR}/water.vert
+    ${CMAKE_CURRENT_SOURCE_DIR}/water.frag
 )
 
 add_custom_command(TARGET VoxelEngine POST_BUILD
