@@ -29,7 +29,7 @@ figure out what the hell an euler angle was or how exactly physics work. I hope 
 - CMake 3.14+
 - C++17 compiler and OpenGL 4.6 capable GPU/drivers
 - GLFW development package (or enable `-DGLFW_FETCH=ON` to fetch/build it; defaults to ON on Windows, OFF elsewhere)
-- Linux packages (Debian/Ubuntu): `sudo apt/yay -S install build-essential cmake libglfw3-dev libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev`
+- Linux packages (Debian/Ubuntu): `sudo apt install/yay -S build-essential cmake libglfw3-dev libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev`
 
 ## Build
 ```bash
