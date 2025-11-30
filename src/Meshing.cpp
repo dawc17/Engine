@@ -29,6 +29,61 @@ static float getWaterHeightForMesh(BlockID block)
     return getWaterHeight(block);
 }
 
+static float getWaterCornerHeight(BlockGetter getBlock, int cornerX, int cornerY, int cornerZ)
+{
+    float maxHeight = 0.0f;
+    int waterCount = 0;
+    int dropCount = 0;
+    
+    for (int dx = -1; dx <= 0; dx++)
+    {
+        for (int dz = -1; dz <= 0; dz++)
+        {
+            int bx = cornerX + dx;
+            int bz = cornerZ + dz;
+            
+            BlockID block = getBlock(bx, cornerY, bz);
+            if (isWater(block))
+            {
+                BlockID above = getBlock(bx, cornerY + 1, bz);
+                if (isWater(above))
+                {
+                    return 1.0f;
+                }
+                
+                float h = getWaterHeightForMesh(block);
+                if (h > maxHeight)
+                    maxHeight = h;
+                waterCount++;
+            }
+            else if (block == 0)
+            {
+                BlockID below = getBlock(bx, cornerY - 1, bz);
+                if (isWater(below))
+                {
+                    dropCount++;
+                }
+            }
+        }
+    }
+    
+    if (waterCount == 0)
+        return 0.0f;
+    
+    if (dropCount > 0)
+    {
+        if (dropCount >= 3)
+            return 0.05f;
+        if (dropCount >= 2)
+            return 0.15f;
+        if (waterCount == 1)
+            return 0.2f;
+        return maxHeight * 0.5f;
+    }
+    
+    return maxHeight;
+}
+
 static void buildGreedyMesh(
     const BlockID* blocks,
     BlockGetter getBlock,
@@ -215,30 +270,39 @@ static void buildGreedyMesh(
               else finalPos[v] = static_cast<float>(j);
 
               bool isTopVertex = originalPos.y > 0.5f;
+              float vertexWaterHeight = height;
               
               if (liquidsOnly && dir == 2)
               {
-                finalPos.y = static_cast<float>(i) + height - 0.1f;
+                int cornerX = static_cast<int>(finalPos.x);
+                int cornerZ = static_cast<int>(finalPos.z);
+                float cornerHeight = getWaterCornerHeight(getBlock, cornerX, i, cornerZ);
+                finalPos.y = static_cast<float>(i) + cornerHeight - 0.1f;
+                vertexWaterHeight = cornerHeight;
               }
               else if (liquidsOnly && (dir == 0 || dir == 1 || dir == 4 || dir == 5))
               {
-                float baseY;
+                int blockY;
                 if (dir == 0 || dir == 1)
                 {
-                  baseY = static_cast<float>(k);
+                  blockY = k;
                 }
                 else
                 {
-                  baseY = static_cast<float>(j);
+                  blockY = j;
                 }
                 
                 if (isTopVertex)
                 {
-                  finalPos.y = baseY + height - 0.1f;
+                  int cornerX = static_cast<int>(finalPos.x);
+                  int cornerZ = static_cast<int>(finalPos.z);
+                  float cornerHeight = getWaterCornerHeight(getBlock, cornerX, blockY, cornerZ);
+                  finalPos.y = static_cast<float>(blockY) + cornerHeight - 0.1f;
+                  vertexWaterHeight = cornerHeight;
                 }
                 else
                 {
-                  finalPos.y = baseY;
+                  finalPos.y = static_cast<float>(blockY);
                 }
               }
 
@@ -249,7 +313,7 @@ static void buildGreedyMesh(
 
               if (liquidsOnly && (dir == 0 || dir == 1 || dir == 4 || dir == 5))
               {
-                localV = isTopVertex ? height : 0.0f;
+                localV = isTopVertex ? vertexWaterHeight : 0.0f;
               }
 
               switch (rotation)
