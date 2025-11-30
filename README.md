@@ -1,4 +1,4 @@
-# Engine
+# VoxelEngine
 
 Voxel chunk playground built with modern OpenGL 4.6. Renders greedy-meshed 16x16x16 chunks using a 2D texture array sliced from `assets/textures/blocks.png` (32x32 tiles) and overlays ImGui debug stats. GLAD, ImGui, and GLM are vendored under `libs/`. Features a full player controller, block palette with HUD icons, multi-layer chunk streaming, procedural terrain with trees, cave generation (cheese caves + spaghetti tunnels), dynamic day/night cycle with fog, and world persistence.
 
