@@ -116,7 +116,7 @@ Player* g_player = nullptr;
 ChunkManager* g_chunkManager = nullptr;
 WaterSimulator* g_waterSimulator = nullptr;
 
-const std::vector<uint8_t> PLACEABLE_BLOCKS = {1, 2, 3, 4, 5, 6, 7, 8, 9};
+const std::vector<uint8_t> PLACEABLE_BLOCKS = {1, 2, 3, 4, 5, 6, 7, 8};
 int selectedBlockIndex = 2;  // Default to stone (index 2 = block ID 3)
 
 // HUD block icons - maps block ID to OpenGL texture ID

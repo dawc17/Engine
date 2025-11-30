@@ -28,6 +28,7 @@ static float getFluidHeight(BlockGetter getBlock, int cornerX, int cornerY, int 
 {
     int count = 0;
     float totalHeight = 0.0f;
+    bool hasWaterAbove = false;
     
     for (int j = 0; j < 4; j++)
     {
@@ -35,15 +36,15 @@ static float getFluidHeight(BlockGetter getBlock, int cornerX, int cornerY, int 
         int sampleZ = cornerZ - ((j >> 1) & 1);
         
         BlockID above = getBlock(sampleX, cornerY + 1, sampleZ);
-        if (isWater(above))
-        {
-            return 1.0f;
-        }
-        
         BlockID block = getBlock(sampleX, cornerY, sampleZ);
         
         if (isWater(block))
         {
+            if (isWater(above))
+            {
+                hasWaterAbove = true;
+            }
+            
             int depth = getRenderedDepth(block);
             float heightPercent = getLiquidHeightPercent(depth);
             
@@ -62,10 +63,14 @@ static float getFluidHeight(BlockGetter getBlock, int cornerX, int cornerY, int 
         }
     }
     
-    if (count == 0)
-        return 0.0f;
+    if (hasWaterAbove)
+        return 0.95f;
     
-    return 1.0f - totalHeight / static_cast<float>(count);
+    if (count == 0)
+        return 0.5f;
+    
+    float height = 1.0f - totalHeight / static_cast<float>(count);
+    return glm::clamp(height, 0.15f, 0.9f);
 }
 
 static glm::vec3 getFlowDirection(BlockGetter getBlock, int x, int y, int z)
@@ -235,20 +240,10 @@ static void buildGreedyMesh(
               }
               else if (dir != 2 && dir != 3)
               {
-                if (!isNeighborLiquid && neighbor == 0)
+                if (!isNeighborLiquid && (neighbor == 0 || !g_blockTypes[neighbor].solid))
                 {
                   showFace = true;
                   waterHeight = getWaterHeight(current);
-                }
-                else if (isNeighborLiquid)
-                {
-                  uint8_t currentLevel = getWaterLevel(current);
-                  uint8_t neighborLevel = getWaterLevel(neighbor);
-                  if (neighborLevel < currentLevel)
-                  {
-                    showFace = true;
-                    waterHeight = getWaterHeight(current);
-                  }
                 }
               }
               else if (dir == 3)
@@ -345,57 +340,57 @@ static void buildGreedyMesh(
             }
             WaterVertexUV waterUV = calculateWaterUV(flowAngle);
 
+            int blockX = blockWorldPos.x;
+            int blockY = blockWorldPos.y;
+            int blockZ = blockWorldPos.z;
+
             for (int vIdx = 0; vIdx < 4; vIdx++)
             {
               Vertex vtx = face[vIdx];
               glm::vec3 originalPos = vtx.pos;
               glm::vec3 finalPos;
-
-              finalPos[axis] = static_cast<float>(i + axisOffset);
-
-              if (vtx.uv.x > 0.5f) finalPos[u] = static_cast<float>(k + w);
-              else finalPos[u] = static_cast<float>(k);
-
-              if (vtx.uv.y > 0.5f) finalPos[v] = static_cast<float>(j + h);
-              else finalPos[v] = static_cast<float>(j);
-
               bool isTopVertex = originalPos.y > 0.5f;
               float vertexWaterHeight = height;
-              
-              if (liquidsOnly && dir == 2)
+
+              if (liquidsOnly)
               {
-                int cornerX = static_cast<int>(finalPos.x);
-                int cornerZ = static_cast<int>(finalPos.z);
-                float cornerHeight = getFluidHeight(getBlock, cornerX, i, cornerZ);
-                cornerHeight -= 0.001f;
-                finalPos.y = static_cast<float>(i) + cornerHeight;
-                vertexWaterHeight = cornerHeight;
-              }
-              else if (liquidsOnly && (dir == 0 || dir == 1 || dir == 4 || dir == 5))
-              {
-                int blockY;
-                if (dir == 0 || dir == 1)
-                {
-                  blockY = k;
-                }
-                else
-                {
-                  blockY = j;
-                }
+                finalPos.x = static_cast<float>(blockX) + originalPos.x;
+                finalPos.y = static_cast<float>(blockY) + originalPos.y;
+                finalPos.z = static_cast<float>(blockZ) + originalPos.z;
                 
-                if (isTopVertex)
+                if (dir == 2)
                 {
-                  int cornerX = static_cast<int>(finalPos.x);
-                  int cornerZ = static_cast<int>(finalPos.z);
+                  int cornerX = blockX + static_cast<int>(originalPos.x);
+                  int cornerZ = blockZ + static_cast<int>(originalPos.z);
                   float cornerHeight = getFluidHeight(getBlock, cornerX, blockY, cornerZ);
-                  cornerHeight -= 0.001f;
-                  finalPos.y = static_cast<float>(blockY) + cornerHeight;
+                  finalPos.y = static_cast<float>(blockY) + cornerHeight - 0.01f;
                   vertexWaterHeight = cornerHeight;
                 }
-                else
+                else if (dir == 0 || dir == 1 || dir == 4 || dir == 5)
                 {
-                  finalPos.y = static_cast<float>(blockY);
+                  if (isTopVertex)
+                  {
+                    int cornerX = blockX + static_cast<int>(originalPos.x);
+                    int cornerZ = blockZ + static_cast<int>(originalPos.z);
+                    float cornerHeight = getFluidHeight(getBlock, cornerX, blockY, cornerZ);
+                    finalPos.y = static_cast<float>(blockY) + cornerHeight - 0.01f;
+                    vertexWaterHeight = cornerHeight;
+                  }
+                  else
+                  {
+                    finalPos.y = static_cast<float>(blockY);
+                  }
                 }
+              }
+              else
+              {
+                finalPos[axis] = static_cast<float>(i + axisOffset);
+
+                if (vtx.uv.x > 0.5f) finalPos[u] = static_cast<float>(k + w);
+                else finalPos[u] = static_cast<float>(k);
+
+                if (vtx.uv.y > 0.5f) finalPos[v] = static_cast<float>(j + h);
+                else finalPos[v] = static_cast<float>(j);
               }
 
               vtx.pos = finalPos;
