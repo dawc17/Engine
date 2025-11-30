@@ -23,12 +23,10 @@ static const uint32_t FACE_INDICES[6] = {
     0, 1, 2,
     0, 2, 3};
 
-static float getWaterHeight(BlockID block)
+static float getWaterHeightForMesh(BlockID block)
 {
-    if (block == WATER_SOURCE) return 1.0f;
     if (!isWater(block)) return 0.0f;
-    uint8_t level = getWaterLevel(block);
-    return static_cast<float>(level) / 8.0f;
+    return getWaterHeight(block);
 }
 
 static void buildGreedyMesh(
@@ -94,7 +92,7 @@ static void buildGreedyMesh(
               if (dir == 2 && !isNeighborLiquid)
               {
                 showFace = true;
-                waterHeight = getWaterHeight(current);
+                waterHeight = getWaterHeightForMesh(current);
                 
                 BlockID above = getBlock(pos.x, pos.y + 1, pos.z);
                 if (isWater(above))
@@ -107,7 +105,7 @@ static void buildGreedyMesh(
                 if (!isNeighborLiquid && neighbor == 0)
                 {
                   showFace = true;
-                  waterHeight = getWaterHeight(current);
+                  waterHeight = getWaterHeightForMesh(current);
                 }
                 else if (isNeighborLiquid)
                 {
@@ -116,7 +114,7 @@ static void buildGreedyMesh(
                   if (neighborLevel < currentLevel)
                   {
                     showFace = true;
-                    waterHeight = getWaterHeight(current);
+                    waterHeight = getWaterHeightForMesh(current);
                   }
                 }
               }
@@ -224,9 +222,23 @@ static void buildGreedyMesh(
               }
               else if (liquidsOnly && (dir == 0 || dir == 1 || dir == 4 || dir == 5))
               {
+                float baseY;
+                if (dir == 0 || dir == 1)
+                {
+                  baseY = static_cast<float>(k);
+                }
+                else
+                {
+                  baseY = static_cast<float>(j);
+                }
+                
                 if (isTopVertex)
                 {
-                  finalPos.y = static_cast<float>(i) + height - 0.1f;
+                  finalPos.y = baseY + height - 0.1f;
+                }
+                else
+                {
+                  finalPos.y = baseY;
                 }
               }
 

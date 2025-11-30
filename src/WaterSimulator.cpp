@@ -4,19 +4,47 @@
 #include "BlockTypes.h"
 #include <algorithm>
 #include <array>
+#include <climits>
+
+static const int DX[4] = {1, -1, 0, 0};
+static const int DZ[4] = {0, 0, 1, -1};
 
 WaterSimulator::WaterSimulator()
 {
 }
 
-void WaterSimulator::scheduleUpdate(int x, int y, int z, int tickDelay)
+uint8_t WaterSimulator::getBlock(int x, int y, int z)
+{
+    if (!chunkManager) return 0;
+    return getBlockAtWorld(x, y, z, *chunkManager);
+}
+
+void WaterSimulator::setBlock(int x, int y, int z, uint8_t block)
+{
+    if (!chunkManager) return;
+    setBlockAtWorld(x, y, z, block, *chunkManager);
+}
+
+bool WaterSimulator::canFlowInto(int x, int y, int z)
+{
+    uint8_t block = getBlock(x, y, z);
+    return block == 0 || isWater(block);
+}
+
+bool WaterSimulator::isSolid(int x, int y, int z)
+{
+    uint8_t block = getBlock(x, y, z);
+    return block != 0 && g_blockTypes[block].solid && !isWater(block);
+}
+
+void WaterSimulator::scheduleUpdate(int x, int y, int z)
 {
     glm::ivec3 pos(x, y, z);
     if (scheduledPositions.find(pos) != scheduledPositions.end())
         return;
     
     scheduledPositions.insert(pos);
-    pendingUpdates.push({x, y, z, currentTick + tickDelay});
+    pendingUpdates.push({x, y, z, currentTick + tickRate});
 }
 
 void WaterSimulator::tick()
@@ -28,7 +56,7 @@ void WaterSimulator::tick()
     while (!pendingUpdates.empty())
     {
         WaterUpdate& update = pendingUpdates.front();
-        if (update.tickDelay <= currentTick)
+        if (update.scheduledTick <= currentTick)
         {
             toProcess.push_back(update);
             glm::ivec3 pos(update.x, update.y, update.z);
@@ -43,7 +71,7 @@ void WaterSimulator::tick()
     
     for (const auto& update : toProcess)
     {
-        processWaterAt(update.x, update.y, update.z);
+        processWaterBlock(update.x, update.y, update.z);
     }
 }
 
@@ -51,262 +79,261 @@ void WaterSimulator::onBlockChanged(int x, int y, int z, uint8_t oldBlock, uint8
 {
     if (isWater(newBlock))
     {
-        scheduleUpdate(x, y, z, tickRate);
+        scheduleUpdate(x, y, z);
     }
     
-    if (isWater(oldBlock) && !isWater(newBlock))
+    if (isWater(oldBlock) || newBlock == 0)
     {
-        scheduleUpdate(x, y - 1, z, tickRate);
-        scheduleUpdate(x + 1, y, z, tickRate);
-        scheduleUpdate(x - 1, y, z, tickRate);
-        scheduleUpdate(x, y, z + 1, tickRate);
-        scheduleUpdate(x, y, z - 1, tickRate);
-        scheduleUpdate(x, y + 1, z, tickRate);
+        scheduleUpdate(x, y - 1, z);
+        scheduleUpdate(x + 1, y, z);
+        scheduleUpdate(x - 1, y, z);
+        scheduleUpdate(x, y, z + 1);
+        scheduleUpdate(x, y, z - 1);
+        scheduleUpdate(x, y + 1, z);
     }
     
-    if (!isWater(oldBlock) && !isWater(newBlock))
+    if (newBlock == 0)
     {
-        uint8_t above = getBlockAtWorld(x, y + 1, z, *chunkManager);
-        uint8_t below = getBlockAtWorld(x, y - 1, z, *chunkManager);
-        uint8_t nx = getBlockAtWorld(x + 1, y, z, *chunkManager);
-        uint8_t px = getBlockAtWorld(x - 1, y, z, *chunkManager);
-        uint8_t nz = getBlockAtWorld(x, y, z + 1, *chunkManager);
-        uint8_t pz = getBlockAtWorld(x, y, z - 1, *chunkManager);
-        
-        if (isWater(above)) scheduleUpdate(x, y + 1, z, tickRate);
-        if (isWater(below)) scheduleUpdate(x, y - 1, z, tickRate);
-        if (isWater(nx)) scheduleUpdate(x + 1, y, z, tickRate);
-        if (isWater(px)) scheduleUpdate(x - 1, y, z, tickRate);
-        if (isWater(nz)) scheduleUpdate(x, y, z + 1, tickRate);
-        if (isWater(pz)) scheduleUpdate(x, y, z - 1, tickRate);
-        
-        if (newBlock == 0)
+        for (int i = 0; i < 4; i++)
         {
-            if (isWater(above)) scheduleUpdate(x, y, z, tickRate);
-            if (isWater(nx)) scheduleUpdate(x, y, z, tickRate);
-            if (isWater(px)) scheduleUpdate(x, y, z, tickRate);
-            if (isWater(nz)) scheduleUpdate(x, y, z, tickRate);
-            if (isWater(pz)) scheduleUpdate(x, y, z, tickRate);
+            uint8_t neighbor = getBlock(x + DX[i], y, z + DZ[i]);
+            if (isWater(neighbor)) scheduleUpdate(x, y, z);
         }
+        
+        uint8_t above = getBlock(x, y + 1, z);
+        if (isWater(above)) scheduleUpdate(x, y, z);
     }
 }
 
-bool WaterSimulator::canFlowInto(int x, int y, int z)
-{
-    uint8_t block = getBlockAtWorld(x, y, z, *chunkManager);
-    if (block == 0) return true;
-    if (isWater(block)) return true;
-    return false;
-}
-
-void WaterSimulator::flowInto(int x, int y, int z, uint8_t level)
+void WaterSimulator::processWaterBlock(int x, int y, int z)
 {
     if (!chunkManager) return;
     
-    uint8_t currentBlock = getBlockAtWorld(x, y, z, *chunkManager);
-    uint8_t currentLevel = getWaterLevel(currentBlock);
+    uint8_t block = getBlock(x, y, z);
     
-    if (level > currentLevel)
+    if (block == 0)
     {
-        uint8_t newBlock = waterBlockFromLevel(level);
-        setBlockAtWorld(x, y, z, newBlock, *chunkManager);
-        scheduleUpdate(x, y, z, tickRate);
-    }
-}
-
-void WaterSimulator::processWaterAt(int x, int y, int z)
-{
-    if (!chunkManager) return;
-    
-    uint8_t block = getBlockAtWorld(x, y, z, *chunkManager);
-    
-    if (!isWater(block))
-    {
-        uint8_t above = getBlockAtWorld(x, y + 1, z, *chunkManager);
+        uint8_t above = getBlock(x, y + 1, z);
         if (isWater(above))
         {
-            uint8_t newLevel = (above == WATER_SOURCE) ? WATER_LEVEL_MAX : getWaterLevel(above);
-            setBlockAtWorld(x, y, z, waterBlockFromLevel(newLevel), *chunkManager);
-            scheduleUpdate(x, y, z, tickRate);
+            setBlock(x, y, z, WATER_FALLING);
+            scheduleUpdate(x, y, z);
+            return;
         }
-        else
+        
+        uint8_t maxNeighborLevel = 0;
+        for (int i = 0; i < 4; i++)
         {
-            const int dx[] = {1, -1, 0, 0};
-            const int dz[] = {0, 0, 1, -1};
-            uint8_t maxNeighborLevel = 0;
-            
-            for (int i = 0; i < 4; i++)
+            uint8_t neighbor = getBlock(x + DX[i], y, z + DZ[i]);
+            if (isWater(neighbor))
             {
-                uint8_t neighbor = getBlockAtWorld(x + dx[i], y, z + dz[i], *chunkManager);
-                if (isWater(neighbor))
-                {
-                    uint8_t neighborLevel = getWaterLevel(neighbor);
-                    if (neighborLevel > maxNeighborLevel)
-                        maxNeighborLevel = neighborLevel;
-                }
+                uint8_t level = getWaterLevel(neighbor);
+                if (level > maxNeighborLevel)
+                    maxNeighborLevel = level;
             }
-            
-            if (maxNeighborLevel > 1)
-            {
-                setBlockAtWorld(x, y, z, waterBlockFromLevel(maxNeighborLevel - 1), *chunkManager);
-                scheduleUpdate(x, y, z, tickRate);
-            }
+        }
+        
+        if (maxNeighborLevel > 1)
+        {
+            setBlock(x, y, z, waterBlockFromLevel(maxNeighborLevel - 1));
+            scheduleUpdate(x, y, z);
         }
         return;
     }
     
+    if (!isWater(block))
+        return;
+    
+    if (isWaterSource(block))
+    {
+        trySpreadDown(x, y, z, block);
+        trySpreadHorizontal(x, y, z, block);
+        return;
+    }
+    
+    if (tryCreateSource(x, y, z))
+        return;
+    
+    uint8_t above = getBlock(x, y + 1, z);
+    bool hasWaterAbove = isWater(above);
+    
+    if (hasWaterAbove)
+    {
+        if (block != WATER_FALLING)
+        {
+            setBlock(x, y, z, WATER_FALLING);
+        }
+        trySpreadDown(x, y, z, WATER_FALLING);
+        trySpreadHorizontal(x, y, z, WATER_FALLING);
+        return;
+    }
+    
+    uint8_t maxNeighborLevel = 0;
+    for (int i = 0; i < 4; i++)
+    {
+        uint8_t neighbor = getBlock(x + DX[i], y, z + DZ[i]);
+        if (isWater(neighbor))
+        {
+            uint8_t level = getWaterLevel(neighbor);
+            if (level > maxNeighborLevel)
+                maxNeighborLevel = level;
+        }
+    }
+    
+    uint8_t expectedLevel = 0;
+    if (maxNeighborLevel > 1)
+    {
+        expectedLevel = maxNeighborLevel - 1;
+    }
+    
     uint8_t currentLevel = getWaterLevel(block);
-    bool isSource = (block == WATER_SOURCE);
     
-    uint8_t below = getBlockAtWorld(x, y - 1, z, *chunkManager);
-    if (canFlowInto(x, y - 1, z) && !g_blockTypes[below].solid)
+    if (expectedLevel == 0)
     {
-        uint8_t belowLevel = getWaterLevel(below);
-        if (belowLevel < WATER_LEVEL_MAX - 1)
-        {
-            setBlockAtWorld(x, y - 1, z, waterBlockFromLevel(WATER_LEVEL_MAX - 1), *chunkManager);
-            scheduleUpdate(x, y - 1, z, tickRate);
-        }
-        
-        if (!isSource)
-        {
-            return;
-        }
+        setBlock(x, y, z, 0);
+        scheduleNeighborUpdates(x, y, z);
+        return;
     }
     
-    if (!isSource)
+    if (expectedLevel != currentLevel)
     {
-        uint8_t above = getBlockAtWorld(x, y + 1, z, *chunkManager);
-        bool hasSourceAbove = isWater(above);
-        
-        const int dx[] = {1, -1, 0, 0};
-        const int dz[] = {0, 0, 1, -1};
-        uint8_t maxNeighborLevel = 0;
-        int adjacentSourceCount = 0;
-        
-        for (int i = 0; i < 4; i++)
-        {
-            uint8_t neighbor = getBlockAtWorld(x + dx[i], y, z + dz[i], *chunkManager);
-            if (isWater(neighbor))
-            {
-                uint8_t neighborLevel = getWaterLevel(neighbor);
-                if (neighborLevel > maxNeighborLevel)
-                    maxNeighborLevel = neighborLevel;
-                if (neighbor == WATER_SOURCE)
-                    adjacentSourceCount++;
-            }
-        }
-        
-        if (adjacentSourceCount >= 2)
-        {
-            setBlockAtWorld(x, y, z, WATER_SOURCE, *chunkManager);
-            scheduleNeighborUpdates(x, y, z);
-            return;
-        }
-        
-        uint8_t expectedLevel = 0;
-        if (hasSourceAbove)
-        {
-            expectedLevel = WATER_LEVEL_MAX;
-        }
-        else if (maxNeighborLevel > 1)
-        {
-            expectedLevel = maxNeighborLevel - 1;
-        }
-        
-        if (expectedLevel != currentLevel)
-        {
-            if (expectedLevel == 0)
-            {
-                setBlockAtWorld(x, y, z, 0, *chunkManager);
-            }
-            else
-            {
-                setBlockAtWorld(x, y, z, waterBlockFromLevel(expectedLevel), *chunkManager);
-            }
-            scheduleNeighborUpdates(x, y, z);
-            return;
-        }
+        setBlock(x, y, z, waterBlockFromLevel(expectedLevel));
+        scheduleNeighborUpdates(x, y, z);
     }
     
-    if (currentLevel > 1 || isSource)
+    trySpreadDown(x, y, z, block);
+    if (currentLevel > 1)
     {
-        uint8_t flowLevel = isSource ? (WATER_LEVEL_MAX - 1) : (currentLevel - 1);
-        
-        const int dx[] = {1, -1, 0, 0};
-        const int dz[] = {0, 0, 1, -1};
-        
-        std::array<int, 4> distances;
-        std::fill(distances.begin(), distances.end(), 100);
-        
-        for (int i = 0; i < 4; i++)
+        trySpreadHorizontal(x, y, z, block);
+    }
+}
+
+void WaterSimulator::trySpreadDown(int x, int y, int z, uint8_t currentBlock)
+{
+    uint8_t below = getBlock(x, y - 1, z);
+    
+    if (canFlowInto(x, y - 1, z) && !isSolid(x, y - 1, z))
+    {
+        if (!isWater(below))
         {
-            int nx = x + dx[i];
-            int nz = z + dz[i];
-            
-            uint8_t neighborBlock = getBlockAtWorld(nx, y, nz, *chunkManager);
-            if (g_blockTypes[neighborBlock].solid && !isWater(neighborBlock))
-                continue;
-            
-            uint8_t belowNeighbor = getBlockAtWorld(nx, y - 1, nz, *chunkManager);
-            if (!g_blockTypes[belowNeighbor].solid || isWater(belowNeighbor))
-            {
-                distances[i] = 1;
-                continue;
-            }
-            
-            distances[i] = findPathToEdge(nx, y, nz, 4);
+            setBlock(x, y - 1, z, WATER_FALLING);
+            scheduleUpdate(x, y - 1, z);
+        }
+        else if (below != WATER_FALLING && below != WATER_SOURCE)
+        {
+            setBlock(x, y - 1, z, WATER_FALLING);
+            scheduleUpdate(x, y - 1, z);
+        }
+    }
+}
+
+void WaterSimulator::trySpreadHorizontal(int x, int y, int z, uint8_t currentBlock)
+{
+    uint8_t currentLevel = getWaterLevel(currentBlock);
+    if (currentLevel <= 1 && !isWaterSource(currentBlock) && !isFallingWater(currentBlock))
+        return;
+    
+    uint8_t flowLevel;
+    if (isWaterSource(currentBlock) || isFallingWater(currentBlock))
+        flowLevel = 7;
+    else
+        flowLevel = currentLevel - 1;
+    
+    if (flowLevel < 1)
+        return;
+    
+    std::array<int, 4> distances;
+    std::fill(distances.begin(), distances.end(), INT_MAX);
+    
+    for (int i = 0; i < 4; i++)
+    {
+        int nx = x + DX[i];
+        int nz = z + DZ[i];
+        
+        if (!canFlowInto(nx, y, nz))
+            continue;
+        
+        if (!isSolid(nx, y - 1, nz))
+        {
+            distances[i] = 0;
+            continue;
         }
         
-        int minDist = *std::min_element(distances.begin(), distances.end());
+        distances[i] = findDistanceToHole(nx, y, nz, WATER_EDGE_SEARCH_DISTANCE);
+    }
+    
+    int minDist = *std::min_element(distances.begin(), distances.end());
+    
+    for (int i = 0; i < 4; i++)
+    {
+        int nx = x + DX[i];
+        int nz = z + DZ[i];
         
-        for (int i = 0; i < 4; i++)
+        if (!canFlowInto(nx, y, nz))
+            continue;
+        
+        bool shouldFlow = (minDist == INT_MAX) || (distances[i] <= minDist);
+        
+        if (shouldFlow)
         {
-            int nx = x + dx[i];
-            int nz = z + dz[i];
+            uint8_t neighborBlock = getBlock(nx, y, nz);
+            uint8_t neighborLevel = getWaterLevel(neighborBlock);
             
-            uint8_t neighborBlock = getBlockAtWorld(nx, y, nz, *chunkManager);
-            
-            if (g_blockTypes[neighborBlock].solid && !isWater(neighborBlock))
-                continue;
-            
-            bool shouldFlow = (minDist >= 100) || (distances[i] <= minDist);
-            
-            if (shouldFlow)
+            if (neighborLevel < flowLevel)
             {
-                uint8_t neighborLevel = getWaterLevel(neighborBlock);
-                if (neighborLevel < flowLevel)
-                {
-                    flowInto(nx, y, nz, flowLevel);
-                }
+                setBlock(nx, y, nz, waterBlockFromLevel(flowLevel));
+                scheduleUpdate(nx, y, nz);
             }
         }
     }
 }
 
-int WaterSimulator::findPathToEdge(int x, int y, int z, int maxDist)
+bool WaterSimulator::tryCreateSource(int x, int y, int z)
 {
-    if (maxDist <= 0) return 100;
+    uint8_t below = getBlock(x, y - 1, z);
+    bool hasSolidBelow = isSolid(x, y - 1, z) || isWaterSource(below);
     
-    uint8_t below = getBlockAtWorld(x, y - 1, z, *chunkManager);
-    if (!g_blockTypes[below].solid || isWater(below))
+    if (!hasSolidBelow)
+        return false;
+    
+    int adjacentSourceCount = 0;
+    for (int i = 0; i < 4; i++)
+    {
+        uint8_t neighbor = getBlock(x + DX[i], y, z + DZ[i]);
+        if (isWaterSource(neighbor))
+            adjacentSourceCount++;
+    }
+    
+    if (adjacentSourceCount >= 2)
+    {
+        setBlock(x, y, z, WATER_SOURCE);
+        scheduleNeighborUpdates(x, y, z);
+        return true;
+    }
+    
+    return false;
+}
+
+int WaterSimulator::findDistanceToHole(int x, int y, int z, int depth)
+{
+    if (depth <= 0)
+        return INT_MAX;
+    
+    if (!isSolid(x, y - 1, z))
         return 0;
     
-    const int dx[] = {1, -1, 0, 0};
-    const int dz[] = {0, 0, 1, -1};
-    int minDist = 100;
+    int minDist = INT_MAX;
     
     for (int i = 0; i < 4; i++)
     {
-        int nx = x + dx[i];
-        int nz = z + dz[i];
+        int nx = x + DX[i];
+        int nz = z + DZ[i];
         
-        uint8_t neighborBlock = getBlockAtWorld(nx, y, nz, *chunkManager);
-        if (g_blockTypes[neighborBlock].solid && !isWater(neighborBlock))
+        if (!canFlowInto(nx, y, nz))
             continue;
         
-        int dist = findPathToEdge(nx, y, nz, maxDist - 1);
-        if (dist + 1 < minDist)
+        int dist = findDistanceToHole(nx, y, nz, depth - 1);
+        if (dist != INT_MAX && dist + 1 < minDist)
             minDist = dist + 1;
     }
     
@@ -315,11 +342,10 @@ int WaterSimulator::findPathToEdge(int x, int y, int z, int maxDist)
 
 void WaterSimulator::scheduleNeighborUpdates(int x, int y, int z)
 {
-    scheduleUpdate(x + 1, y, z, tickRate);
-    scheduleUpdate(x - 1, y, z, tickRate);
-    scheduleUpdate(x, y + 1, z, tickRate);
-    scheduleUpdate(x, y - 1, z, tickRate);
-    scheduleUpdate(x, y, z + 1, tickRate);
-    scheduleUpdate(x, y, z - 1, tickRate);
+    scheduleUpdate(x + 1, y, z);
+    scheduleUpdate(x - 1, y, z);
+    scheduleUpdate(x, y + 1, z);
+    scheduleUpdate(x, y - 1, z);
+    scheduleUpdate(x, y, z + 1);
+    scheduleUpdate(x, y, z - 1);
 }
-
