@@ -16,15 +16,10 @@ uniform mat4 model;
 
 void main()
 {
-   vec3 pos = aPos;
-   // Lower only the top surface a little so water sits beneath land without sinking the whole prism
-   if (pos.y > 0.5)
-      pos.y -= 0.05;
-   
-   vec4 worldPosition = model * vec4(pos, 1.0);
+   vec4 worldPosition = model * vec4(aPos, 1.0);
    WorldPos = worldPosition.xyz;
    
-   gl_Position = transform * vec4(pos, 1.0);
+   gl_Position = transform * vec4(aPos, 1.0);
    LocalUV = aLocalUV;
    TileIndex = aTileIndex;
    SkyLight = aSkyLight;

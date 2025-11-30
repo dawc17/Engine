@@ -20,15 +20,34 @@ void main()
     float sunBrightness = timeOfDay;
     float totalLight = max(SkyLight * sunBrightness, ambientLight);
 
-    // Gentle color ripple based on world space to keep seams aligned across chunks
-    vec2 flow = WorldPos.xz * 0.08 + vec2(time * 0.12, time * 0.09);
-    float ripple =
-        sin(flow.x) * 0.08 +
-        sin(flow.y) * 0.08 +
-        sin((flow.x + flow.y) * 0.5) * 0.05;
-
-    float shade = clamp(0.9 + ripple * 0.08, 0.78, 1.05);
-    vec3 baseColor = vec3(0.08, 0.33, 0.75); // flat blue water
+    vec2 flowUV = LocalUV;
+    bool isFlowing = abs(flowUV.x - 0.5) > 0.01 || abs(flowUV.y - 0.5) > 0.01;
+    
+    vec2 animatedUV;
+    if (isFlowing)
+    {
+        vec2 flowDir = normalize(flowUV - vec2(0.5));
+        animatedUV = WorldPos.xz * 0.1 + flowDir * time * 0.5;
+    }
+    else
+    {
+        animatedUV = WorldPos.xz * 0.1 + vec2(time * 0.02, time * 0.015);
+    }
+    
+    float wave1 = sin(animatedUV.x * 3.0 + animatedUV.y * 2.0) * 0.5 + 0.5;
+    float wave2 = sin(animatedUV.x * 2.0 - animatedUV.y * 3.0 + time * 0.3) * 0.5 + 0.5;
+    float wave3 = sin((animatedUV.x + animatedUV.y) * 4.0 + time * 0.2) * 0.5 + 0.5;
+    
+    float combinedWave = (wave1 + wave2 + wave3) / 3.0;
+    
+    float ripple = combinedWave * 0.15 - 0.075;
+    
+    float shade = clamp(0.85 + ripple, 0.75, 1.0) * FaceShade;
+    
+    vec3 deepColor = vec3(0.02, 0.15, 0.45);
+    vec3 shallowColor = vec3(0.15, 0.45, 0.75);
+    vec3 baseColor = mix(deepColor, shallowColor, combinedWave * 0.3 + 0.5);
+    
     vec3 litColor = baseColor * shade * totalLight;
     
     float dist = length(WorldPos - cameraPos);
@@ -37,5 +56,7 @@ void main()
 
     vec3 finalColor = mix(litColor, fogColor, fogFactor);
 
-    FragColor = vec4(finalColor, 0.7);
+    float alpha = 0.75 + combinedWave * 0.1;
+    
+    FragColor = vec4(finalColor, alpha);
 }

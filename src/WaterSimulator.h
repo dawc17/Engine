@@ -3,6 +3,7 @@
 #include <queue>
 #include <unordered_set>
 #include <glm/glm.hpp>
+#include <cmath>
 
 struct ChunkManager;
 
@@ -44,13 +45,27 @@ inline uint8_t getWaterLevel(uint8_t blockId)
     return 0;
 }
 
+inline int getRenderedDepth(uint8_t blockId)
+{
+    if (!isWater(blockId)) return -1;
+    if (blockId == WATER_SOURCE) return 0;
+    if (blockId == WATER_FALLING) return 8;
+    return blockId - WATER_SOURCE;
+}
+
+inline float getLiquidHeightPercent(int depth)
+{
+    if (depth >= 8) depth = 0;
+    return static_cast<float>(depth + 1) / 9.0f;
+}
+
 inline float getWaterHeight(uint8_t blockId)
 {
-    if (blockId == WATER_SOURCE || blockId == WATER_FALLING) return 0.9f;
+    if (blockId == WATER_SOURCE || blockId == WATER_FALLING) return 0.875f;
     if (blockId >= WATER_FLOW_1 && blockId <= WATER_FLOW_7)
     {
-        uint8_t level = getWaterLevel(blockId);
-        return 0.1f + (static_cast<float>(level) / 8.0f) * 0.8f;
+        int depth = blockId - WATER_SOURCE;
+        return 1.0f - getLiquidHeightPercent(depth);
     }
     return 0.0f;
 }

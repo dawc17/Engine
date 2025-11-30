@@ -5,6 +5,7 @@
 #include <glad/glad.h>
 #include <cstddef>
 #include <queue>
+#include <cmath>
 
 static const Vertex FACE_POS_X[4] = { {{1, 0, 0}, {1, 0}, 0, 1.0f, 1.0f}, {{1, 1, 0}, {1, 1}, 0, 1.0f, 1.0f}, {{1, 1, 1}, {0, 1}, 0, 1.0f, 1.0f}, {{1, 0, 1}, {0, 0}, 0, 1.0f, 1.0f} };
 static const Vertex FACE_NEG_X[4] = { {{0, 0, 1}, {1, 0}, 0, 1.0f, 1.0f}, {{0, 1, 1}, {1, 1}, 0, 1.0f, 1.0f}, {{0, 1, 0}, {0, 1}, 0, 1.0f, 1.0f}, {{0, 0, 0}, {0, 0}, 0, 1.0f, 1.0f} };
@@ -23,51 +24,142 @@ static const uint32_t FACE_INDICES[6] = {
     0, 1, 2,
     0, 2, 3};
 
-static float getWaterHeightForMesh(BlockID block)
+static float getFluidHeight(BlockGetter getBlock, int cornerX, int cornerY, int cornerZ)
 {
-    if (!isWater(block)) return 0.0f;
-    return getWaterHeight(block);
-}
-
-static float getWaterCornerHeight(BlockGetter getBlock, int cornerX, int cornerY, int cornerZ)
-{
+    int count = 0;
     float totalHeight = 0.0f;
-    int sampleCount = 0;
     
-    for (int dx = -1; dx <= 0; dx++)
+    for (int j = 0; j < 4; j++)
     {
-        for (int dz = -1; dz <= 0; dz++)
+        int sampleX = cornerX - (j & 1);
+        int sampleZ = cornerZ - ((j >> 1) & 1);
+        
+        BlockID above = getBlock(sampleX, cornerY + 1, sampleZ);
+        if (isWater(above))
         {
-            int bx = cornerX + dx;
-            int bz = cornerZ + dz;
+            return 1.0f;
+        }
+        
+        BlockID block = getBlock(sampleX, cornerY, sampleZ);
+        
+        if (isWater(block))
+        {
+            int depth = getRenderedDepth(block);
+            float heightPercent = getLiquidHeightPercent(depth);
             
-            BlockID block = getBlock(bx, cornerY, bz);
-            BlockID above = getBlock(bx, cornerY + 1, bz);
-            
-            if (isWater(block))
+            if (depth >= 8 || depth == 0)
             {
-                if (isWater(above))
-                {
-                    totalHeight += 1.0f;
-                }
-                else
-                {
-                    totalHeight += getWaterHeightForMesh(block);
-                }
-                sampleCount++;
+                totalHeight += heightPercent * 10.0f;
+                count += 10;
             }
-            else if (block == 0 || !g_blockTypes[block].solid)
-            {
-                totalHeight += 0.0f;
-                sampleCount++;
-            }
+            totalHeight += heightPercent;
+            count++;
+        }
+        else if (block == 0 || !g_blockTypes[block].solid)
+        {
+            totalHeight += 1.0f;
+            count++;
         }
     }
     
-    if (sampleCount == 0)
+    if (count == 0)
         return 0.0f;
     
-    return totalHeight / static_cast<float>(sampleCount);
+    return 1.0f - totalHeight / static_cast<float>(count);
+}
+
+static glm::vec3 getFlowDirection(BlockGetter getBlock, int x, int y, int z)
+{
+    glm::vec3 flow(0.0f);
+    
+    BlockID currentBlock = getBlock(x, y, z);
+    if (!isWater(currentBlock))
+        return flow;
+    
+    int currentDepth = getRenderedDepth(currentBlock);
+    
+    static const int dx[] = {1, -1, 0, 0};
+    static const int dz[] = {0, 0, 1, -1};
+    
+    for (int i = 0; i < 4; i++)
+    {
+        int nx = x + dx[i];
+        int nz = z + dz[i];
+        
+        BlockID neighborBlock = getBlock(nx, y, nz);
+        int neighborDepth = getRenderedDepth(neighborBlock);
+        
+        if (neighborDepth < 0)
+        {
+            if (neighborBlock == 0 || !g_blockTypes[neighborBlock].solid)
+            {
+                BlockID belowNeighbor = getBlock(nx, y - 1, nz);
+                int belowDepth = getRenderedDepth(belowNeighbor);
+                if (belowDepth >= 0)
+                {
+                    int diff = belowDepth - (currentDepth - 8);
+                    flow.x += static_cast<float>(dx[i] * diff);
+                    flow.z += static_cast<float>(dz[i] * diff);
+                }
+            }
+        }
+        else
+        {
+            int diff = neighborDepth - currentDepth;
+            flow.x += static_cast<float>(dx[i] * diff);
+            flow.z += static_cast<float>(dz[i] * diff);
+        }
+    }
+    
+    float len = glm::length(flow);
+    if (len > 0.0f)
+    {
+        flow = glm::normalize(flow);
+    }
+    
+    return flow;
+}
+
+static float getSlopeAngle(BlockGetter getBlock, int x, int y, int z)
+{
+    glm::vec3 flow = getFlowDirection(getBlock, x, y, z);
+    if (flow.x == 0.0f && flow.z == 0.0f)
+        return -1000.0f;
+    return std::atan2(flow.z, flow.x) - (3.14159265359f / 2.0f);
+}
+
+struct WaterVertexUV
+{
+    float u0, v0, u1, v1, u2, v2, u3, v3;
+};
+
+static WaterVertexUV calculateWaterUV(float angle)
+{
+    WaterVertexUV uv;
+    
+    if (angle < -999.0f)
+    {
+        uv.u0 = 0.0f; uv.v0 = 0.0f;
+        uv.u1 = 0.0f; uv.v1 = 1.0f;
+        uv.u2 = 1.0f; uv.v2 = 1.0f;
+        uv.u3 = 1.0f; uv.v3 = 0.0f;
+    }
+    else
+    {
+        float sinA = std::sin(angle) * 0.25f;
+        float cosA = std::cos(angle) * 0.25f;
+        
+        uv.u0 = 0.5f + (-cosA - sinA);
+        uv.v0 = 0.5f + (-cosA + sinA);
+        uv.u1 = 0.5f + (-cosA + sinA);
+        uv.v1 = 0.5f + (cosA + sinA);
+        uv.u2 = 0.5f + (cosA + sinA);
+        uv.v2 = 0.5f + (cosA - sinA);
+        uv.u3 = 0.5f + (cosA - sinA);
+        uv.v3 = 0.5f + (-cosA - sinA);
+    }
+    
+    return uv;
 }
 
 static void buildGreedyMesh(
@@ -133,7 +225,7 @@ static void buildGreedyMesh(
               if (dir == 2 && !isNeighborLiquid)
               {
                 showFace = true;
-                waterHeight = getWaterHeightForMesh(current);
+                waterHeight = getWaterHeight(current);
                 
                 BlockID above = getBlock(pos.x, pos.y + 1, pos.z);
                 if (isWater(above))
@@ -146,7 +238,7 @@ static void buildGreedyMesh(
                 if (!isNeighborLiquid && neighbor == 0)
                 {
                   showFace = true;
-                  waterHeight = getWaterHeightForMesh(current);
+                  waterHeight = getWaterHeight(current);
                 }
                 else if (isNeighborLiquid)
                 {
@@ -155,7 +247,7 @@ static void buildGreedyMesh(
                   if (neighborLevel < currentLevel)
                   {
                     showFace = true;
-                    waterHeight = getWaterHeightForMesh(current);
+                    waterHeight = getWaterHeight(current);
                   }
                 }
               }
@@ -240,6 +332,18 @@ static void buildGreedyMesh(
             float skyLightNormalized = static_cast<float>(light) / static_cast<float>(MAX_SKY_LIGHT);
 
             int axisOffset = (n[axis] > 0) ? 1 : 0;
+            
+            glm::ivec3 blockWorldPos;
+            blockWorldPos[axis] = i;
+            blockWorldPos[u] = k;
+            blockWorldPos[v] = j;
+            
+            float flowAngle = -1000.0f;
+            if (liquidsOnly && dir == 2)
+            {
+                flowAngle = getSlopeAngle(getBlock, blockWorldPos.x, blockWorldPos.y, blockWorldPos.z);
+            }
+            WaterVertexUV waterUV = calculateWaterUV(flowAngle);
 
             for (int vIdx = 0; vIdx < 4; vIdx++)
             {
@@ -262,8 +366,9 @@ static void buildGreedyMesh(
               {
                 int cornerX = static_cast<int>(finalPos.x);
                 int cornerZ = static_cast<int>(finalPos.z);
-                float cornerHeight = getWaterCornerHeight(getBlock, cornerX, i, cornerZ);
-                finalPos.y = static_cast<float>(i) + cornerHeight - 0.1f;
+                float cornerHeight = getFluidHeight(getBlock, cornerX, i, cornerZ);
+                cornerHeight -= 0.001f;
+                finalPos.y = static_cast<float>(i) + cornerHeight;
                 vertexWaterHeight = cornerHeight;
               }
               else if (liquidsOnly && (dir == 0 || dir == 1 || dir == 4 || dir == 5))
@@ -282,8 +387,9 @@ static void buildGreedyMesh(
                 {
                   int cornerX = static_cast<int>(finalPos.x);
                   int cornerZ = static_cast<int>(finalPos.z);
-                  float cornerHeight = getWaterCornerHeight(getBlock, cornerX, blockY, cornerZ);
-                  finalPos.y = static_cast<float>(blockY) + cornerHeight - 0.1f;
+                  float cornerHeight = getFluidHeight(getBlock, cornerX, blockY, cornerZ);
+                  cornerHeight -= 0.001f;
+                  finalPos.y = static_cast<float>(blockY) + cornerHeight;
                   vertexWaterHeight = cornerHeight;
                 }
                 else
@@ -297,32 +403,45 @@ static void buildGreedyMesh(
               float localU = (vtx.uv.x > 0.5f) ? static_cast<float>(w) : 0.0f;
               float localV = (vtx.uv.y > 0.5f) ? static_cast<float>(h) : 0.0f;
 
-              if (liquidsOnly && (dir == 0 || dir == 1 || dir == 4 || dir == 5))
+              if (liquidsOnly && dir == 2)
+              {
+                  switch (vIdx)
+                  {
+                      case 0: localU = waterUV.u0; localV = waterUV.v0; break;
+                      case 1: localU = waterUV.u1; localV = waterUV.v1; break;
+                      case 2: localU = waterUV.u2; localV = waterUV.v2; break;
+                      case 3: localU = waterUV.u3; localV = waterUV.v3; break;
+                  }
+              }
+              else if (liquidsOnly && (dir == 0 || dir == 1 || dir == 4 || dir == 5))
               {
                 localV = isTopVertex ? vertexWaterHeight : 0.0f;
               }
 
-              switch (rotation)
+              if (!liquidsOnly)
               {
-                case 1:
+                  switch (rotation)
                   {
-                    float tmp = localU;
-                    localU = localV;
-                    localV = static_cast<float>(w) - tmp;
+                    case 1:
+                      {
+                        float tmp = localU;
+                        localU = localV;
+                        localV = static_cast<float>(w) - tmp;
+                      }
+                      break;
+                    case 2:
+                      localV = static_cast<float>(h) - localV;
+                      break;
+                    case 3:
+                      {
+                        float tmp = localU;
+                        localU = static_cast<float>(h) - localV;
+                        localV = tmp;
+                      }
+                      break;
+                    default:
+                      break;
                   }
-                  break;
-                case 2:
-                  localV = static_cast<float>(h) - localV;
-                  break;
-                case 3:
-                  {
-                    float tmp = localU;
-                    localU = static_cast<float>(h) - localV;
-                    localV = tmp;
-                  }
-                  break;
-                default:
-                  break;
               }
 
               vtx.uv = glm::vec2(localU, localV);
