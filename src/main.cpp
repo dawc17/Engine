@@ -20,6 +20,7 @@
 #include "JobSystem.h"
 #include "RegionManager.h"
 #include "WaterSimulator.h"
+#include "ParticleSystem.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -115,6 +116,7 @@ const float WATER_TICK_INTERVAL = 0.05f;
 Player* g_player = nullptr;
 ChunkManager* g_chunkManager = nullptr;
 WaterSimulator* g_waterSimulator = nullptr;
+ParticleSystem* g_particleSystem = nullptr;
 
 const std::vector<uint8_t> PLACEABLE_BLOCKS = {1, 2, 3, 4, 5, 6, 7, 8};
 int selectedBlockIndex = 2;  // Default to stone (index 2 = block ID 3)
@@ -418,6 +420,10 @@ int main()
     g_chunkManager = &chunkManager;
     g_waterSimulator = &waterSimulator;
 
+    ParticleSystem particleSystem;
+    particleSystem.init();
+    g_particleSystem = &particleSystem;
+
     // Track selected block
     std::optional<RaycastHit> selectedBlock;
 
@@ -598,6 +604,8 @@ int main()
       const int CHUNK_HEIGHT_MIN = 0;
       const int CHUNK_HEIGHT_MAX = (256 / CHUNK_SIZE) - 1;
 
+      particleSystem.update(deltaTime);
+
       chunkManager.update();
 
       if (enableWaterSimulation)
@@ -751,6 +759,8 @@ int main()
       }
 
       glDepthMask(GL_TRUE);
+      glBindTexture(GL_TEXTURE_2D_ARRAY, textureArray);
+      particleSystem.render(view, proj, eyePos);
       glDisable(GL_BLEND);
 
       // Raycast for block selection
@@ -1199,13 +1209,21 @@ void mouseButtonCallback(GLFWwindow *window, int button, int action, int mods)
 
   if (button == GLFW_MOUSE_BUTTON_LEFT)
   {
-    uint8_t oldBlock = getBlockAtWorld(hit->blockPos.x, hit->blockPos.y, hit->blockPos.z, *g_chunkManager);
-    setBlockAtWorld(hit->blockPos.x, hit->blockPos.y, hit->blockPos.z, 0, *g_chunkManager);
-    
-    if (g_waterSimulator)
-    {
-      g_waterSimulator->onBlockChanged(hit->blockPos.x, hit->blockPos.y, hit->blockPos.z, oldBlock, 0);
-    }
+      uint8_t oldBlock = getBlockAtWorld(hit->blockPos.x, hit->blockPos.y, hit->blockPos.z, *g_chunkManager);
+      
+      if (oldBlock != 0 && g_particleSystem)
+      {
+          int tileIndex = g_blockTypes[oldBlock].faceTexture[0];
+          glm::vec3 blockCenter = glm::vec3(hit->blockPos) + glm::vec3(0.5f);
+          g_particleSystem->spawnBlockBreakParticles(blockCenter, tileIndex, 15);
+      }
+      
+      setBlockAtWorld(hit->blockPos.x, hit->blockPos.y, hit->blockPos.z, 0, *g_chunkManager);
+      
+      if (g_waterSimulator)
+      {
+          g_waterSimulator->onBlockChanged(hit->blockPos.x, hit->blockPos.y, hit->blockPos.z, oldBlock, 0);
+      }
   }
   else if (button == GLFW_MOUSE_BUTTON_RIGHT)
   {

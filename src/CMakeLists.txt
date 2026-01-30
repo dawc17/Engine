@@ -16,6 +16,7 @@ set(SOURCES
     TerrainGenerator.cpp
     CaveGenerator.cpp
     WaterSimulator.cpp
+    ParticleSystem.cpp
 )
 
 add_executable(VoxelEngine ${SOURCES})

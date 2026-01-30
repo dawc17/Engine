@@ -55,7 +55,7 @@ void ParticleSystem::compileShaders() {
         TexCoord = aQuadPos + 0.5;
         TileIndex = aTileIndex;
         ParticleColor = aColor;
-        Lifetime = aLifetime;
+        Lifetime = aLife;
     }
     )";
 
