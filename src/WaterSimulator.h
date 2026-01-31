@@ -1,5 +1,6 @@
 #pragma once
 #include "Chunk.h"
+#include "CoordUtils.h"
 #include <queue>
 #include <unordered_set>
 #include <glm/glm.hpp>
@@ -83,17 +84,6 @@ struct WaterUpdate
     int scheduledTick;
 };
 
-struct WaterUpdateHash
-{
-    std::size_t operator()(const glm::ivec3& v) const noexcept
-    {
-        std::size_t h = std::hash<int>{}(v.x);
-        h ^= std::hash<int>{}(v.y) + 0x9e3779b9 + (h << 6) + (h >> 2);
-        h ^= std::hash<int>{}(v.z) + 0x9e3779b9 + (h << 6) + (h >> 2);
-        return h;
-    }
-};
-
 class WaterSimulator
 {
 public:
@@ -111,7 +101,7 @@ public:
 private:
     ChunkManager* chunkManager = nullptr;
     std::queue<WaterUpdate> pendingUpdates;
-    std::unordered_set<glm::ivec3, WaterUpdateHash> scheduledPositions;
+    std::unordered_set<glm::ivec3, IVec3Hash> scheduledPositions;
     int tickRate = WATER_TICK_RATE;
     int currentTick = 0;
     

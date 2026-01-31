@@ -8,32 +8,27 @@
 
 bool ChunkManager::hasChunk(int cx, int cy, int cz)
 {
-  ChunkCoord key{cx, cy, cz};
-  return chunks.find(key) != chunks.end();
+  return chunks.find(ChunkCoord(cx, cy, cz)) != chunks.end();
 }
 
 bool ChunkManager::isLoading(int cx, int cy, int cz) const
 {
-  ChunkCoord key{cx, cy, cz};
-  return loadingChunks.find(key) != loadingChunks.end();
+  return loadingChunks.find(ChunkCoord(cx, cy, cz)) != loadingChunks.end();
 }
 
 bool ChunkManager::isMeshing(int cx, int cy, int cz) const
 {
-  ChunkCoord key{cx, cy, cz};
-  return meshingChunks.find(key) != meshingChunks.end();
+  return meshingChunks.find(ChunkCoord(cx, cy, cz)) != meshingChunks.end();
 }
 
 bool ChunkManager::isSaving(int cx, int cy, int cz) const
 {
-  ChunkCoord key{cx, cy, cz};
-  return savingChunks.find(key) != savingChunks.end();
+  return savingChunks.find(ChunkCoord(cx, cy, cz)) != savingChunks.end();
 }
 
 Chunk *ChunkManager::getChunk(int cx, int cy, int cz)
 {
-  ChunkCoord key{cx, cy, cz};
-  auto it = chunks.find(key);
+  auto it = chunks.find(ChunkCoord(cx, cy, cz));
   if (it == chunks.end())
     return nullptr;
   return it->second.get();
@@ -41,9 +36,9 @@ Chunk *ChunkManager::getChunk(int cx, int cy, int cz)
 
 Chunk *ChunkManager::loadChunk(int cx, int cy, int cz)
 {
-  ChunkCoord key{cx, cy, cz};
+  ChunkCoord key(cx, cy, cz);
   if (savingChunks.count(key) > 0)
-    return nullptr;  // Wait for in-flight save to finish before reloading
+    return nullptr;
 
   if (hasChunk(cx, cy, cz))
     return getChunk(cx, cy, cz);
@@ -67,21 +62,14 @@ Chunk *ChunkManager::loadChunk(int cx, int cy, int cz)
   {
     generateTerrain(c->blocks, cx, cy, cz);
     
-    // Compute terrain heights for this chunk's XZ columns
     int terrainHeights[CHUNK_SIZE * CHUNK_SIZE];
     getTerrainHeightsForChunk(cx, cz, terrainHeights);
     applyCavesToChunk(*c, DEFAULT_WORLD_SEED, terrainHeights);
   }
 
-  const int neighborOffsets[6][3] = {
-    {1, 0, 0}, {-1, 0, 0},
-    {0, 1, 0}, {0, -1, 0},
-    {0, 0, 1}, {0, 0, -1}
-  };
-  
-  for (const auto& offset : neighborOffsets)
+  for (int i = 0; i < 6; i++)
   {
-    Chunk* neighbor = getChunk(cx + offset[0], cy + offset[1], cz + offset[2]);
+    Chunk* neighbor = getChunk(cx + DIRS[i].x, cy + DIRS[i].y, cz + DIRS[i].z);
     if (neighbor != nullptr)
     {
       neighbor->dirtyMesh = true;
@@ -93,7 +81,7 @@ Chunk *ChunkManager::loadChunk(int cx, int cy, int cz)
 
 void ChunkManager::unloadChunk(int cx, int cy, int cz)
 {
-  ChunkCoord key{cx, cy, cz};
+  ChunkCoord key(cx, cy, cz);
   auto it = chunks.find(key);
 
   if (it != chunks.end())
@@ -114,7 +102,7 @@ void ChunkManager::enqueueLoadChunk(int cx, int cy, int cz)
     return;
   }
 
-  ChunkCoord key{cx, cy, cz};
+  ChunkCoord key(cx, cy, cz);
   if (hasChunk(cx, cy, cz) || loadingChunks.count(key) > 0 || savingChunks.count(key) > 0)
     return;
 
@@ -130,7 +118,7 @@ void ChunkManager::enqueueLoadChunk(int cx, int cy, int cz)
 
 void ChunkManager::enqueueSaveAndUnload(int cx, int cy, int cz)
 {
-  ChunkCoord key{cx, cy, cz};
+  ChunkCoord key(cx, cy, cz);
   
   if (!hasChunk(cx, cy, cz))
     return;
@@ -152,7 +140,6 @@ void ChunkManager::enqueueSaveAndUnload(int cx, int cy, int cz)
     job->cz = cz;
     std::memcpy(job->blocks, chunk->blocks, CHUNK_VOLUME * sizeof(BlockID));
 
-    // Prioritize saves so they finish before a reload can race in
     jobSystem->enqueueHighPriority(std::move(job));
   }
 
@@ -164,7 +151,7 @@ void ChunkManager::enqueueMeshChunk(int cx, int cy, int cz)
   if (!jobSystem)
     return;
 
-  ChunkCoord key{cx, cy, cz};
+  ChunkCoord key(cx, cy, cz);
   if (meshingChunks.count(key) > 0)
     return;
 
@@ -330,14 +317,13 @@ void ChunkManager::update()
   auto completedSaves = jobSystem->pollCompletedSaves();
   for (auto& job : completedSaves)
   {
-    ChunkCoord key{job->cx, job->cy, job->cz};
-    savingChunks.erase(key);
+    savingChunks.erase(ChunkCoord(job->cx, job->cy, job->cz));
   }
 }
 
 void ChunkManager::onGenerateComplete(GenerateChunkJob* job)
 {
-  ChunkCoord key{job->cx, job->cy, job->cz};
+  ChunkCoord key(job->cx, job->cy, job->cz);
   loadingChunks.erase(key);
 
   if (hasChunk(job->cx, job->cy, job->cz))
@@ -356,15 +342,9 @@ void ChunkManager::onGenerateComplete(GenerateChunkJob* job)
 
   c->dirtyMesh = true;
 
-  const int neighborOffsets[6][3] = {
-    {1, 0, 0}, {-1, 0, 0},
-    {0, 1, 0}, {0, -1, 0},
-    {0, 0, 1}, {0, 0, -1}
-  };
-
-  for (const auto& offset : neighborOffsets)
+  for (int i = 0; i < 6; i++)
   {
-    Chunk* neighbor = getChunk(job->cx + offset[0], job->cy + offset[1], job->cz + offset[2]);
+    Chunk* neighbor = getChunk(job->cx + DIRS[i].x, job->cy + DIRS[i].y, job->cz + DIRS[i].z);
     if (neighbor != nullptr)
     {
       neighbor->dirtyMesh = true;
@@ -374,8 +354,7 @@ void ChunkManager::onGenerateComplete(GenerateChunkJob* job)
 
 void ChunkManager::onMeshComplete(MeshChunkJob* job)
 {
-  ChunkCoord key{job->cx, job->cy, job->cz};
-  meshingChunks.erase(key);
+  meshingChunks.erase(ChunkCoord(job->cx, job->cy, job->cz));
 
   Chunk* chunk = getChunk(job->cx, job->cy, job->cz);
   if (!chunk)

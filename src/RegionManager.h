@@ -1,5 +1,6 @@
 #pragma once
 #include "Chunk.h"
+#include "CoordUtils.h"
 #include <cstdint>
 #include <string>
 #include <unordered_map>
@@ -15,26 +16,8 @@ constexpr int HEADER_ENTRIES = REGION_SIZE * REGION_SIZE;
 constexpr int HEADER_SIZE = HEADER_ENTRIES * 8;
 constexpr int SECTOR_SIZE = 4096;
 
-struct RegionCoord
-{
-    int x;
-    int z;
-
-    bool operator==(const RegionCoord& other) const noexcept
-    {
-        return x == other.x && z == other.z;
-    }
-};
-
-struct RegionCoordHash
-{
-    std::size_t operator()(const RegionCoord& coord) const noexcept
-    {
-        std::size_t h = std::hash<int>{}(coord.x);
-        h ^= std::hash<int>{}(coord.z) + 0x9e3779b9 + (h << 6) + (h >> 2);
-        return h;
-    }
-};
+using RegionCoord = glm::ivec2;
+using RegionCoordHash = IVec2Hash;
 
 struct ColumnEntry
 {

@@ -676,16 +676,11 @@ int main()
         if (chunk->dirtyMesh && !chunkManager.isMeshing(chunk->position.x, chunk->position.y, chunk->position.z))
         {
           bool neighborsReady = true;
-          const int neighborOffsets[6][3] = {
-            {1, 0, 0}, {-1, 0, 0},
-            {0, 1, 0}, {0, -1, 0},
-            {0, 0, 1}, {0, 0, -1}
-          };
-          for (const auto& offset : neighborOffsets)
+          for (int i = 0; i < 6; i++)
           {
-            int nx = chunk->position.x + offset[0];
-            int ny = chunk->position.y + offset[1];
-            int nz = chunk->position.z + offset[2];
+            int nx = chunk->position.x + DIRS[i].x;
+            int ny = chunk->position.y + DIRS[i].y;
+            int nz = chunk->position.z + DIRS[i].z;
             if (ny >= CHUNK_HEIGHT_MIN && ny <= CHUNK_HEIGHT_MAX)
             {
               if (!chunkManager.hasChunk(nx, ny, nz))

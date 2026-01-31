@@ -2,77 +2,48 @@
 #include "ChunkManager.h"
 #include "Chunk.h"
 #include "BlockTypes.h"
+#include "CoordUtils.h"
 #include <cmath>
 
 uint8_t getBlockAtWorld(int wx, int wy, int wz, ChunkManager& chunkManager)
 {
-  // Convert world coords to chunk coords
-  int cx = static_cast<int>(std::floor(static_cast<float>(wx) / CHUNK_SIZE));
-  int cy = static_cast<int>(std::floor(static_cast<float>(wy) / CHUNK_SIZE));
-  int cz = static_cast<int>(std::floor(static_cast<float>(wz) / CHUNK_SIZE));
+  glm::ivec3 chunk = worldToChunk(wx, wy, wz);
+  Chunk* c = chunkManager.getChunk(chunk.x, chunk.y, chunk.z);
+  if (!c)
+    return 0;
 
-  Chunk* chunk = chunkManager.getChunk(cx, cy, cz);
-  if (!chunk)
-    return 0; // Air if chunk not loaded
-
-  // Local coords within chunk (handle negative modulo correctly)
-  int lx = ((wx % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
-  int ly = ((wy % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
-  int lz = ((wz % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
-
-  return chunk->blocks[blockIndex(lx, ly, lz)];
+  glm::ivec3 local = worldToLocal(wx, wy, wz);
+  return c->blocks[blockIndex(local.x, local.y, local.z)];
 }
 
 void setBlockAtWorld(int wx, int wy, int wz, uint8_t blockId, ChunkManager& chunkManager)
 {
-  // Convert world coords to chunk coords
-  int cx = static_cast<int>(std::floor(static_cast<float>(wx) / CHUNK_SIZE));
-  int cy = static_cast<int>(std::floor(static_cast<float>(wy) / CHUNK_SIZE));
-  int cz = static_cast<int>(std::floor(static_cast<float>(wz) / CHUNK_SIZE));
-
-  Chunk* chunk = chunkManager.getChunk(cx, cy, cz);
-  if (!chunk)
+  glm::ivec3 chunk = worldToChunk(wx, wy, wz);
+  Chunk* c = chunkManager.getChunk(chunk.x, chunk.y, chunk.z);
+  if (!c)
     return;
 
-  // Local coords within chunk
-  int lx = ((wx % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
-  int ly = ((wy % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
-  int lz = ((wz % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+  glm::ivec3 local = worldToLocal(wx, wy, wz);
+  c->blocks[blockIndex(local.x, local.y, local.z)] = blockId;
+  c->dirtyMesh = true;
+  c->dirtyLight = true;
 
-  chunk->blocks[blockIndex(lx, ly, lz)] = blockId;
-  chunk->dirtyMesh = true;
-  chunk->dirtyLight = true;  // Recalculate lighting when blocks change
-
-  // Mark neighboring chunks dirty if block is on a boundary
-  if (lx == 0)
+  for (int i = 0; i < 6; i++)
   {
-    Chunk* neighbor = chunkManager.getChunk(cx - 1, cy, cz);
-    if (neighbor) { neighbor->dirtyMesh = true; neighbor->dirtyLight = true; }
-  }
-  if (lx == CHUNK_SIZE - 1)
-  {
-    Chunk* neighbor = chunkManager.getChunk(cx + 1, cy, cz);
-    if (neighbor) { neighbor->dirtyMesh = true; neighbor->dirtyLight = true; }
-  }
-  if (ly == 0)
-  {
-    Chunk* neighbor = chunkManager.getChunk(cx, cy - 1, cz);
-    if (neighbor) { neighbor->dirtyMesh = true; neighbor->dirtyLight = true; }
-  }
-  if (ly == CHUNK_SIZE - 1)
-  {
-    Chunk* neighbor = chunkManager.getChunk(cx, cy + 1, cz);
-    if (neighbor) { neighbor->dirtyMesh = true; neighbor->dirtyLight = true; }
-  }
-  if (lz == 0)
-  {
-    Chunk* neighbor = chunkManager.getChunk(cx, cy, cz - 1);
-    if (neighbor) { neighbor->dirtyMesh = true; neighbor->dirtyLight = true; }
-  }
-  if (lz == CHUNK_SIZE - 1)
-  {
-    Chunk* neighbor = chunkManager.getChunk(cx, cy, cz + 1);
-    if (neighbor) { neighbor->dirtyMesh = true; neighbor->dirtyLight = true; }
+    glm::ivec3 neighborLocal = local + DIRS[i];
+    bool onBoundary = neighborLocal.x < 0 || neighborLocal.x >= CHUNK_SIZE ||
+                      neighborLocal.y < 0 || neighborLocal.y >= CHUNK_SIZE ||
+                      neighborLocal.z < 0 || neighborLocal.z >= CHUNK_SIZE;
+    if (onBoundary)
+    {
+      glm::ivec3 neighborChunk = chunk + DIRS[i];
+      Chunk* neighbor = chunkManager.getChunk(neighborChunk.x, neighborChunk.y, neighborChunk.z);
+      if (neighbor)
+      {
+        neighbor->dirtyMesh = true;
+        neighbor->dirtyLight = true;
+      }
+    }
   }
 }
 
@@ -129,7 +100,7 @@ std::optional<RaycastHit> raycastVoxel(
   while (distance < maxDistance)
   {
     uint8_t block = getBlockAtWorld(voxel.x, voxel.y, voxel.z, chunkManager);
-    if (block != 0 && g_blockTypes[block].solid)
+    if (isBlockSolid(block))
     {
       RaycastHit hit;
       hit.blockPos = voxel;

@@ -56,7 +56,7 @@ static float getFluidHeight(BlockGetter getBlock, int cornerX, int cornerY, int 
             totalHeight += heightPercent;
             count++;
         }
-        else if (block == 0 || !g_blockTypes[block].solid)
+        else if (!isBlockSolid(block))
         {
             totalHeight += 1.0f;
             count++;
@@ -96,7 +96,7 @@ static glm::vec3 getFlowDirection(BlockGetter getBlock, int x, int y, int z)
         
         if (neighborDepth < 0)
         {
-            if (neighborBlock == 0 || !g_blockTypes[neighborBlock].solid)
+            if (!isBlockSolid(neighborBlock))
             {
                 BlockID belowNeighbor = getBlock(nx, y - 1, nz);
                 int belowDepth = getRenderedDepth(belowNeighbor);
@@ -240,7 +240,7 @@ static void buildGreedyMesh(
               }
               else if (dir != 2 && dir != 3)
               {
-                if (!isNeighborLiquid && (neighbor == 0 || !g_blockTypes[neighbor].solid))
+                if (!isNeighborLiquid && !isBlockSolid(neighbor))
                 {
                   showFace = true;
                   waterHeight = getWaterHeight(current);
@@ -248,7 +248,7 @@ static void buildGreedyMesh(
               }
               else if (dir == 3)
               {
-                if (!isNeighborLiquid && !g_blockTypes[neighbor].solid)
+                if (!isNeighborLiquid && !isBlockSolid(neighbor))
                 {
                   showFace = true;
                 }
@@ -264,7 +264,7 @@ static void buildGreedyMesh(
               {
                 showFace = true;
               }
-              else if (g_blockTypes[neighbor].transparent)
+              else if (isBlockTransparent(neighbor))
               {
                 if (current == neighbor && g_blockTypes[current].connectsToSame)
                 {
@@ -507,7 +507,7 @@ void calculateSkyLight(Chunk &c, ChunkManager &chunkManager)
       if (chunkAbove)
       {
         BlockID blockAbove = chunkAbove->blocks[blockIndex(x, 0, z)];
-        if (blockAbove != 0 && !g_blockTypes[blockAbove].transparent)
+        if (!isBlockTransparent(blockAbove))
         {
           incomingLight = chunkAbove->skyLight[blockIndex(x, 0, z)];
         }
@@ -529,7 +529,7 @@ void calculateSkyLight(Chunk &c, ChunkManager &chunkManager)
           if (currentLight > 1)
             lightQueue.push({x, y, z});
         }
-        else if (g_blockTypes[block].transparent)
+        else if (isBlockTransparent(block))
         {
           if (currentLight > 0 && (y % 2 == 0))
             currentLight = currentLight > 1 ? currentLight - 1 : currentLight;
@@ -572,7 +572,7 @@ void calculateSkyLight(Chunk &c, ChunkManager &chunkManager)
       int nidx = blockIndex(nx, ny, nz);
       BlockID neighborBlock = c.blocks[nidx];
       
-      if (neighborBlock != 0 && !g_blockTypes[neighborBlock].transparent)
+      if (!isBlockTransparent(neighborBlock))
         continue;
       
       uint8_t attenuation = 1;

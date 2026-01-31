@@ -89,11 +89,9 @@ void Player::jump()
   }
 }
 
-static bool isBlockSolid(int wx, int wy, int wz, ChunkManager& chunkManager)
+static bool isBlockSolidAt(int wx, int wy, int wz, ChunkManager& chunkManager)
 {
-  uint8_t blockId = getBlockAtWorld(wx, wy, wz, chunkManager);
-  if (blockId == 0) return false;
-  return g_blockTypes[blockId].solid;
+  return isBlockSolid(getBlockAtWorld(wx, wy, wz, chunkManager));
 }
 
 static void getCollidingBlocks(const AABB& playerAABB, ChunkManager& chunkManager, std::vector<AABB>& outBlocks)
@@ -113,7 +111,7 @@ static void getCollidingBlocks(const AABB& playerAABB, ChunkManager& chunkManage
     {
       for (int z = minZ; z <= maxZ; z++)
       {
-        if (isBlockSolid(x, y, z, chunkManager))
+        if (isBlockSolidAt(x, y, z, chunkManager))
         {
           outBlocks.push_back(AABB::fromBlockPos(x, y, z));
         }

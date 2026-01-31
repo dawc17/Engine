@@ -34,7 +34,7 @@ bool WaterSimulator::canFlowInto(int x, int y, int z)
 bool WaterSimulator::isSolid(int x, int y, int z)
 {
     uint8_t block = getBlock(x, y, z);
-    return block != 0 && g_blockTypes[block].solid && !isWater(block);
+    return isBlockSolid(block) && !isWater(block);
 }
 
 void WaterSimulator::scheduleUpdate(int x, int y, int z)

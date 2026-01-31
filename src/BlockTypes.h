@@ -25,7 +25,24 @@ void initBlockTypes();
 void randomizeBlockTextures();
 void resetBlockTextures();
 
-// Convert tile index + local UV (0-1) to atlas UV
+inline bool isBlockSolid(uint8_t blockId)
+{
+    if (blockId == 0) return false;
+    return g_blockTypes[blockId].solid;
+}
+
+inline bool isBlockTransparent(uint8_t blockId)
+{
+    if (blockId == 0) return true;
+    return g_blockTypes[blockId].transparent;
+}
+
+inline bool isBlockLiquid(uint8_t blockId)
+{
+    if (blockId == 0) return false;
+    return g_blockTypes[blockId].isLiquid;
+}
+
 inline glm::vec2 atlasUV(int tileIndex, float localU, float localV)
 {
     int tx = tileIndex % ATLAS_TILES_X;

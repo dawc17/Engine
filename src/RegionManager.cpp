@@ -178,7 +178,7 @@ std::string RegionManager::getRegionPath(int regX, int regZ) const
 
 RegionFile* RegionManager::getOrOpenRegion(int regX, int regZ)
 {
-    RegionCoord coord{regX, regZ};
+    RegionCoord coord(regX, regZ);
 
     std::lock_guard<std::mutex> lock(regionsMutex);
 

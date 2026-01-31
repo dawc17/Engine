@@ -1,22 +1,16 @@
-#ifndef VBO_CLASS_H
-#define VBO_CLASS_H
-
-#include<glad/glad.h>
+#pragma once
+#include <glad/glad.h>
 
 class VBO
 {
 public:
-	// Reference ID of the Vertex Buffer Object
 	GLuint ID;
-	// Constructor that generates a Vertex Buffer Object and links it to vertices
-	VBO(GLfloat* vertices, GLsizeiptr size);
+	VBO(GLfloat* vertices, GLsizeiptr size, GLenum usage = GL_STATIC_DRAW);
+	VBO();
 
-	// Binds the VBO
+	void Init(GLsizeiptr size, GLenum usage = GL_DYNAMIC_DRAW);
+	void Update(const void* data, GLsizeiptr size, GLintptr offset = 0);
 	void Bind();
-	// Unbinds the VBO
 	void Unbind();
-	// Deletes the VBO
 	void Delete();
 };
-
-#endif
