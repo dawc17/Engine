@@ -24,8 +24,6 @@ enum FaceDir {
   DIR_NEG_Z = 5
 };
 
-// Base light levels for each face direction (Minecraft-style directional lighting)
-// Top faces get full light, sides get varying amounts, bottom gets least
 constexpr float FACE_SHADE[6] = {
   0.8f,   // +X (East)
   0.8f,   // -X (West) 
