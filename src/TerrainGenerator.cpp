@@ -1,6 +1,7 @@
 #include "TerrainGenerator.h"
 #include "PerlinNoise.hpp"
 #include <cmath>
+#include <cstdint>
 
 static const siv::PerlinNoise::seed_type TERRAIN_SEED = 6767420;
 static const siv::PerlinNoise perlin{TERRAIN_SEED};
@@ -229,4 +230,9 @@ void getTerrainHeightsForChunk(int cx, int cz, int* outHeights)
             outHeights[z * CHUNK_SIZE + x] = getTerrainHeightAt(baseX + x, baseZ + z);
         }
     }
+}
+
+uint32_t getWorldSeed()
+{
+    return static_cast<uint32_t>(TERRAIN_SEED);
 }

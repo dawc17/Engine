@@ -1,5 +1,8 @@
 #pragma once
 #include "Chunk.h"
+#include <cstdint>
+
+uint32_t getWorldSeed();
 
 void generateTerrain(BlockID* blocks, int cx, int cy, int cz);
 

@@ -1,3 +1,4 @@
+#include <sstream>
 #ifdef _WIN32
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
@@ -13,6 +14,7 @@
 #include "Camera.h"
 #include "Chunk.h"
 #include "ChunkManager.h"
+#include "TerrainGenerator.h"
 #include "Meshing.h"
 #include "BlockTypes.h"
 #include "Raycast.h"
@@ -21,6 +23,7 @@
 #include "RegionManager.h"
 #include "WaterSimulator.h"
 #include "ParticleSystem.h"
+#include "TerrainGenerator.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -104,6 +107,11 @@ bool autoTimeProgression = true;
 float fogDensity = 0.008f;
 int renderDistance = 4;
 
+bool chatOpen = false;
+bool chatFocusNext = false;
+char chatInput[256] = {};
+std::vector<std::string> chatLog;
+
 bool enableCaustics = true;
 bool isUnderwater = false;
 const int SEA_LEVEL = 116;
@@ -183,6 +191,79 @@ void unloadBlockIcons()
         glDeleteTextures(1, &tex);
     }
     g_blockIcons.clear();
+}
+
+static void pushChatLine(const std::string& line)
+{
+  chatLog.push_back(line);
+  if (chatLog.size() > 200)
+    chatLog.erase(chatLog.begin());
+}
+
+static void executeCommand(const std::string& input, Player& player)
+{
+  if (input.empty())
+    return;
+
+  if (input[0] != '/')
+  {
+    pushChatLine(input);
+    return;
+  }
+
+  std::istringstream iss(input);
+  std::string cmd;
+  iss >> cmd;
+
+  if (cmd == "/noclip")
+  {
+    player.noclip = !player.noclip;
+    pushChatLine(player.noclip ? "noclip on" : "noclip off");
+    return;
+  }
+
+  if (cmd == "/time")
+  {
+    std::string arg;
+    iss >> arg;
+    if (arg == "set")
+      iss >> arg;
+
+    if (arg == "day") { worldTime = 0.25f; autoTimeProgression = false; pushChatLine("time set day"); return; }
+    if (arg == "noon") { worldTime = 0.50f; autoTimeProgression = false; pushChatLine("time set noon"); return; }
+    if (arg == "sunset") { worldTime = 0.75f; autoTimeProgression = false; pushChatLine("time set sunset"); return; }
+    if (arg == "night") { worldTime = 0.90f; autoTimeProgression = false; pushChatLine("time set night"); return; }
+    if (arg == "sunrise") { worldTime = 0.05f; autoTimeProgression = false; pushChatLine("time set sunrise"); return; }
+
+    float t = 0.0f;
+    std::istringstream argStream(arg);
+    if (argStream >> t)
+    {
+      if (t < 0.0f) t = 0.0f;
+      if (t > 1.0f) t = 1.0f;
+      worldTime = t;
+      autoTimeProgression = false;
+      pushChatLine("time set " + std::to_string(t));
+      return;
+    }
+
+    pushChatLine("usage: /time set <0..1> | day | noon | sunset | night | sunrise");
+    return;
+  }
+
+  if (cmd == "/gamemode")
+  {
+    pushChatLine("gamemode placeholder kurwa im lazy");
+    return;
+  }
+
+  if (cmd == "/seed")
+  {
+    pushChatLine("seed " + std::to_string(getWorldSeed()));
+    return;
+  }
+
+  pushChatLine("unknown command broski");
 }
 
 int main()
@@ -549,6 +630,37 @@ int main()
       ImGui_ImplOpenGL3_NewFrame();
       ImGui_ImplGlfw_NewFrame();
       ImGui::NewFrame();
+
+      if (chatOpen)
+      {
+        ImGui::SetNextWindowPos(ImVec2(20.0f, 20.0f), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(600.0f, 200.0f), ImGuiCond_Always);
+        ImGui::Begin("Chat", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize);
+
+        ImGui::BeginChild("ChatLog", ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing()), false);
+        for (const auto& line : chatLog)
+          ImGui::TextUnformatted(line.c_str());
+        ImGui::EndChild();
+
+        if (chatFocusNext)
+        {
+          ImGui::SetKeyboardFocusHere();
+          chatFocusNext = false;
+        }
+
+        if (ImGui::InputText("##ChatInput", chatInput, sizeof(chatInput), ImGuiInputTextFlags_EnterReturnsTrue))
+        {
+          std::string input(chatInput);
+          chatInput[0] = 0;
+          executeCommand(input, player);
+          chatOpen = false;
+          mouseLocked = true;
+          glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+          firstMouse = true;
+        }
+
+        ImGui::End();
+      }
 
       glfwGetFramebufferSize(window, &fbWidth, &fbHeight);
       if (fbHeight == 0)
@@ -1077,8 +1189,37 @@ void framebuffer_size_callback(GLFWwindow *window, int width, int height)
 
 void processInput(GLFWwindow *window, Player &player, float dt)
 {
-  if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+  if (chatOpen && glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+  {
+    chatOpen = false;
+    mouseLocked = true;
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    firstMouse = true;
+  }
+  else if (!chatOpen && glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+  {
     glfwSetWindowShouldClose(window, true);
+  }
+
+  static bool tPressed = false;
+  if (glfwGetKey(window, GLFW_KEY_T) == GLFW_PRESS)
+  {
+    if (!tPressed)
+    {
+      chatOpen = true;
+      chatFocusNext = true;
+      mouseLocked = false;
+      glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+      tPressed = true;
+    }
+  }
+  else
+  {
+    tPressed = false;
+  }
+
+  if (chatOpen)
+    return;
 
   static bool uKeyPressed = false;
   if (glfwGetKey(window, GLFW_KEY_U) == GLFW_PRESS)
