@@ -3,7 +3,6 @@
 #include "Raycast.h"
 #include "BlockTypes.h"
 #include <cmath>
-#include <algorithm>
 
 static thread_local std::vector<AABB> s_collisionScratch;
 

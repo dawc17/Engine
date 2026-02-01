@@ -292,7 +292,7 @@ int main()
     // main draw loop sigma
     while (!glfwWindowShouldClose(window))
     {
-      float currentFrame = glfwGetTime();
+      float currentFrame = static_cast<float>(glfwGetTime());
       float deltaTime = currentFrame - lastFrame;
       lastFrame = currentFrame;
 
@@ -503,8 +503,8 @@ int main()
       glUniform1f(fogDensityLoc, effectiveFogDensity);
       glUniform1f(ambientLightLoc, ambientLight);
 
-      int cx = floor(player.position.x / CHUNK_SIZE);
-      int cz = floor(player.position.z / CHUNK_SIZE);
+      int cx = static_cast<int>(std::floor(player.position.x / CHUNK_SIZE));
+      int cz = static_cast<int>(std::floor(player.position.z / CHUNK_SIZE));
 
       const int LOAD_RADIUS = renderDistance;
       const int UNLOAD_RADIUS = LOAD_RADIUS + 2;
@@ -855,7 +855,8 @@ int main()
 
       // Draw crosshair in the center of the screen
       ImDrawList* drawList = ImGui::GetForegroundDrawList();
-      drawSurvivalHud(player, fbWidth, fbHeight);
+      if (player.gamemode == Gamemode::Survival)
+        drawSurvivalHud(player, fbWidth, fbHeight);
       ImVec2 center(fbWidth * 0.5f, fbHeight * 0.5f);
       float crosshairSize = 10.0f;
       float crosshairThickness = 2.0f;
