@@ -34,6 +34,16 @@ struct Player
   bool onGround;
   bool noclip;  // For debugging - disables collision
 
+  float health;
+  float hunger;
+  bool isDead;
+  float fallDistance;
+  float lastY;
+  bool wasOnGround;
+  float hungerDamageTimer;
+  float regenTimer;
+  float drownTimer;
+
   Player();
 
   // Get the AABB for collision detection

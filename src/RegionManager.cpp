@@ -2,6 +2,7 @@
 #include <filesystem>
 #include <cstring>
 #include <algorithm>
+#include <ios>
 #include "../libs/zlib-1.3.1/zlib.h"
 
 namespace fs = std::filesystem;
@@ -399,8 +400,43 @@ bool RegionManager::loadPlayerData(PlayerData& outData)
     if (!file.is_open())
         return false;
 
-    file.read(reinterpret_cast<char*>(&outData), sizeof(PlayerData));
-    return file.good();
+    file.seekg(0, std::ios::end);
+    std::streamsize size = file.tellg();
+    file.seekg(0, std::ios::beg);
+
+    if (size == static_cast<std::streamsize>(sizeof(PlayerData)))
+    {
+        file.read(reinterpret_cast<char*>(&outData), sizeof(PlayerData));
+        return file.good();
+    }
+
+    struct PlayerDataV1
+    {
+        float x, y, z;
+        float yaw, pitch;
+        float timeOfDay;
+    };
+
+    if (size == static_cast<std::streamsize>(sizeof(PlayerDataV1)))
+    {
+        PlayerDataV1 v1;
+        file.read(reinterpret_cast<char*>(&v1), sizeof(PlayerDataV1));
+        if (!file.good())
+            return false;
+
+        outData.version = 2;
+        outData.x = v1.x;
+        outData.y = v1.y;
+        outData.z = v1.z;
+        outData.yaw = v1.yaw;
+        outData.pitch = v1.pitch;
+        outData.timeOfDay = v1.timeOfDay;
+        outData.health = 20.0f;
+        outData.hunger = 20.0f;
+        return true;
+    }
+
+    return false;
 }
 
 void RegionManager::savePlayerData(const PlayerData& data)

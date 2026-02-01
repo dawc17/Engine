@@ -1,5 +1,7 @@
 set(SOURCES
     main.cpp
+    MainGlobals.cpp
+    SurvivalSystem.cpp
     VBO.cpp
     VAO.cpp
     EBO.cpp

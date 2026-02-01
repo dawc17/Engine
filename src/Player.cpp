@@ -29,6 +29,15 @@ Player::Player()
     , pitch(0.0f)
     , onGround(false)
     , noclip(false)
+    , health(20.0f)
+    , hunger(20.0f)
+    , isDead(false)
+    , fallDistance(0.0f)
+    , lastY(position.y)
+    , wasOnGround(false)
+    , hungerDamageTimer(0.0f)
+    , regenTimer(0.0f)
+    , drownTimer(0.0f)
 {
 }
 

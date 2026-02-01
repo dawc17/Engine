@@ -61,9 +61,12 @@ private:
 
 struct PlayerData
 {
+    uint32_t version;
     float x, y, z;
     float yaw, pitch;
     float timeOfDay;
+    float health;
+    float hunger;
 };
 
 class RegionManager
