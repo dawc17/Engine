@@ -19,6 +19,7 @@ void VAO::LinkAttribInstanced(VBO& vbo, GLuint layout, GLuint numComponents, GLe
 	glVertexAttribPointer(layout, numComponents, type, GL_FALSE, stride, offset);
 	glEnableVertexAttribArray(layout);
 	glVertexAttribDivisor(layout, divisor);
+	//t
 }
 
 void VAO::Bind()
