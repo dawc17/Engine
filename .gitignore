@@ -65,3 +65,8 @@ AGENTS.md
 /.cache
 plan.md
 imgui.ini
+/build-linux
+/VoxelEngine-Release
+/VoxelEngine-Linux
+*.zip
+*.gz
