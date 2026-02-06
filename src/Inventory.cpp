@@ -188,14 +188,14 @@ static void drawSlotWidget(Inventory& inv, int slotIdx, float slotSize, bool isS
     ImU32 bgColor = isSelected ? IM_COL32(80, 80, 80, 220) : IM_COL32(40, 40, 40, 220);
     ImU32 borderColor = isSelected ? IM_COL32(225, 225, 225, 220) : IM_COL32(100, 100, 100, 150);
 
-    dl->AddRectFilled(pos, ImVec2(pos.x + slotSize, pos.y + slotSize), bgColor, 4.0f);
-    dl->AddRect(pos, ImVec2(pos.x + slotSize, pos.y + slotSize), borderColor, 4.0f, 0, isSelected ? 2.0f : 1.0f);
+    dl->AddRectFilled(pos, ImVec2(pos.x + slotSize, pos.y + slotSize), bgColor);
+    dl->AddRect(pos, ImVec2(pos.x + slotSize, pos.y + slotSize), borderColor, 0.0f, 0, isSelected ? 2.0f : 1.0f);
 
     if (ImGui::InvisibleButton("##slot", ImVec2(slotSize, slotSize)))
         handleSlotClick(inv, slotIdx);
 
     if (ImGui::IsItemHovered())
-        dl->AddRectFilled(pos, ImVec2(pos.x + slotSize, pos.y + slotSize), IM_COL32(255, 255, 255, 40), 4.0f);
+        dl->AddRectFilled(pos, ImVec2(pos.x + slotSize, pos.y + slotSize), IM_COL32(255, 255, 255, 40));
 
     const ItemStack& item = inv.slot(slotIdx);
     if (!item.isEmpty())
@@ -238,7 +238,7 @@ void drawHotbar(const Inventory &inv, int fbWidth, int fbHeight)
     dl->AddRectFilled(
         ImVec2(startX - bgPad, startY - bgPad),
         ImVec2(startX + totalWidth + bgPad, startY + slotSize + bgPad),
-        IM_COL32(0, 0, 0, 140), 8.0f);
+        IM_COL32(0, 0, 0, 140));
 
         for (int i = 0; i < HOTBAR_SLOTS; i++)
         {
@@ -250,8 +250,8 @@ void drawHotbar(const Inventory &inv, int fbWidth, int fbHeight)
             ImU32 slotBorder = selected ? IM_COL32(255, 255, 255, 220) : IM_COL32(120, 120, 120, 150);
             float borderThick = selected ? 2.5f : 1.0f;
     
-            dl->AddRectFilled(ImVec2(x, y), ImVec2(x + slotSize, y + slotSize), slotBg, 4.0f);
-            dl->AddRect(ImVec2(x, y), ImVec2(x + slotSize, y + slotSize), slotBorder, 4.0f, 0, borderThick);
+            dl->AddRectFilled(ImVec2(x, y), ImVec2(x + slotSize, y + slotSize), slotBg);
+            dl->AddRect(ImVec2(x, y), ImVec2(x + slotSize, y + slotSize), slotBorder, 0.0f, 0, borderThick);
     
             const ItemStack& item = inv.hotbar(i);
             if (!item.isEmpty())
@@ -299,7 +299,7 @@ void drawInventoryScreen(Inventory &inv, int fbWidth, int fbHeight)
     ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.1f, 0.1f, 0.1f, 0.92f));
     ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.4f, 0.4f, 0.4f, 0.8f));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 2.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
 
     ImGui::Begin("##Inventory", nullptr, flags);
 
