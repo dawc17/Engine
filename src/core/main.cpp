@@ -1,4 +1,3 @@
-#include "../../libs/glm-1.0.2/glm/fwd.hpp"
 #ifdef _WIN32
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
@@ -7,64 +6,46 @@
 #pragma comment(lib, "winmm.lib")
 #endif
 
-// libs
 #include "../../libs/imgui/backends/imgui_impl_glfw.h"
 #include "../../libs/imgui/backends/imgui_impl_opengl3.h"
 #include "../../libs/imgui/imgui.h"
 
-// rendering
-#include "../rendering/opengl/ShaderClass.h"
 #include "../rendering/Camera.h"
 #include "../rendering/Meshing.h"
 #include "../rendering/ParticleSystem.h"
-#include "../rendering/ItemModelGenerator.h"
-#include "../rendering/ToolModelGenerator.h"
 
-// world
 #include "../world/Chunk.h"
 #include "../world/ChunkManager.h"
-#include "../world/RegionManager.h"
 #include "../world/WaterSimulator.h"
 
-// utils
 #include "../utils/BlockTypes.h"
 #include "../utils/CoordUtils.h"
-#include "../utils/JobSystem.h"
 
-// gameplay
 #include "../gameplay/Raycast.h"
 #include "../gameplay/Player.h"
 #include "../gameplay/SurvivalSystem.h"
 #include "../gameplay/Inventory.h"
 
-// core
 #include "MainGlobals.h"
 #include "GameState.h"
+#include "WorldSession.h"
+#include "Renderer.h"
 
-// ui
 #include "../ui/MainMenu.h"
+#include "../ui/DebugUI.h"
+#include "../ui/HUD.h"
 
-// system and thirdparty
-#include "../thirdparty/stb_image.h"
-#include "../world/TerrainGenerator.h"
-#include <memory>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <algorithm>
-#include <array>
 #include <cstdlib>
 #include <exception>
-#include <filesystem>
-#include <fstream>
-#include <random>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
 #include <iostream>
 #include <string>
 #include <vector>
 #include <thread>
-#include <unordered_map>
 
 
 int main(int argc, char* argv[])
@@ -111,197 +92,8 @@ int main(int argc, char* argv[])
     glfwGetFramebufferSize(window, &fbWidth, &fbHeight);
     glViewport(0, 0, fbWidth, fbHeight);
 
-    Shader shaderProgram("default.vert", "default.frag");
-    shaderProgram.Activate();
-    glUniform1i(glGetUniformLocation(shaderProgram.ID, "textureArray"), 0);
-    GLint transformLoc = glGetUniformLocation(shaderProgram.ID, "transform");
-    GLint modelLoc = glGetUniformLocation(shaderProgram.ID, "model");
-    GLint timeOfDayLoc = glGetUniformLocation(shaderProgram.ID, "timeOfDay");
-    GLint cameraPosLoc = glGetUniformLocation(shaderProgram.ID, "cameraPos");
-    GLint skyColorLoc = glGetUniformLocation(shaderProgram.ID, "skyColor");
-    GLint fogColorLoc = glGetUniformLocation(shaderProgram.ID, "fogColor");
-    GLint fogDensityLoc = glGetUniformLocation(shaderProgram.ID, "fogDensity");
-    GLint ambientLightLoc = glGetUniformLocation(shaderProgram.ID, "ambientLight");
-
-    stbi_set_flip_vertically_on_load(false);
-
-    unsigned int textureArray;
-    glGenTextures(1, &textureArray);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D_ARRAY, textureArray);
-    
-    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
-    GLfloat maxAnisotropy = 0.0f;
-    glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &maxAnisotropy);
-    glTexParameterf(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAX_ANISOTROPY, maxAnisotropy);
-
-    int width = 0, height = 0, nrChannels = 0;
-    std::string texturePath =
-        resolveTexturePath("assets/textures/blocks.png");
-    unsigned char *data =
-        stbi_load(texturePath.c_str(), &width, &height, &nrChannels, 0);
-
-    const int TILE_SIZE = 16;
-    const int TILES_X = 32;
-    const int TILES_Y = 32;
-    const int NUM_TILES = TILES_X * TILES_Y;
-
-    if (data)
-    {
-      GLenum internalFormat = (nrChannels == 4) ? GL_RGBA8 : GL_RGB8;
-      GLenum format = (nrChannels == 4) ? GL_RGBA : GL_RGB;
-      
-      glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, internalFormat, 
-                   TILE_SIZE, TILE_SIZE, NUM_TILES, 0, 
-                   format, GL_UNSIGNED_BYTE, nullptr);
-      
-      std::vector<unsigned char> tileData(TILE_SIZE * TILE_SIZE * nrChannels);
-      int tileSizeBytes = TILE_SIZE * nrChannels;
-      int atlasRowBytes = width * nrChannels;
-
-      for (int ty = 0; ty < TILES_Y; ty++)
-      {
-        for (int tx = 0; tx < TILES_X; tx++)
-        {
-          int tileIndex = ty * TILES_X + tx;
-          
-          unsigned char *tileStart = data + (ty * TILE_SIZE) * atlasRowBytes + tx * tileSizeBytes;
-          for (int row = 0; row < TILE_SIZE; row++)
-          {
-             std::copy(tileStart + row * atlasRowBytes, 
-                       tileStart + row * atlasRowBytes + tileSizeBytes,
-                       tileData.begin() + row * tileSizeBytes);
-          }
-          
-          glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 
-                          0, 0, tileIndex,
-                          TILE_SIZE, TILE_SIZE, 1,
-                          format, GL_UNSIGNED_BYTE, tileData.data());
-        }
-      }
-      glGenerateMipmap(GL_TEXTURE_2D_ARRAY);
-      std::cout << "Loaded texture array with " << NUM_TILES << " tiles" << std::endl;
-    }
-    else
-    {
-      std::cerr << "Failed to load texture at " << texturePath << ": "
-                << stbi_failure_reason() << std::endl;
-      unsigned char fallback[] = {255, 0, 255, 255};
-      glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_RGBA8, 1, 1, 1, 0, 
-                   GL_RGBA, GL_UNSIGNED_BYTE, fallback);
-    }
-    stbi_image_free(data);
-
-    initBlockTypes();
-
-    std::string hudIconPath = resolveTexturePath("assets/textures/hud_blocks");
-    loadBlockIcons(hudIconPath);
-    loadItemModels();
-    loadToolModels();
-
-    GLuint destroyTextures[10] = {};
-    for (int i = 0; i < 10; ++i)
-    {
-      std::string destroyPath = resolveTexturePath(
-          "assets/textures/destroy/destroy_stage_" + std::to_string(i) + ".png");
-      destroyTextures[i] = loadHUDIcon(destroyPath, true);
-    }
-
-    Shader selectionShader("selection.vert", "selection.frag");
-    GLint selectionTransformLoc = glGetUniformLocation(selectionShader.ID, "transform");
-    GLint selectionColorLoc = glGetUniformLocation(selectionShader.ID, "color");
-
-    Shader destroyShader("destroy.vert", "destroy.frag");
-    destroyShader.Activate();
-    glUniform1i(glGetUniformLocation(destroyShader.ID, "crackTex"), 0);
-    GLint destroyTransformLoc = glGetUniformLocation(destroyShader.ID, "transform");
-    GLint destroyTimeOfDayLoc = glGetUniformLocation(destroyShader.ID, "timeOfDay");
-    GLint destroyAmbientLightLoc = glGetUniformLocation(destroyShader.ID, "ambientLight");
-    GLint destroySkyLightLoc = glGetUniformLocation(destroyShader.ID, "SkyLight");
-    GLint destroyFaceShadeLoc = glGetUniformLocation(destroyShader.ID, "FaceShade");
-
-    Shader itemModelShader("item_model.vert", "item_model.frag");
-    itemModelShader.Activate();
-    glUniform1i(glGetUniformLocation(itemModelShader.ID, "textureArray"), 0);
-    GLint itemTransformLoc = glGetUniformLocation(itemModelShader.ID, "transform");
-    GLint itemTimeOfDayLoc = glGetUniformLocation(itemModelShader.ID, "timeOfDay");
-    GLint itemAmbientLightLoc = glGetUniformLocation(itemModelShader.ID, "ambientLight");
-
-    Shader toolModelShader("tool_model.vert", "tool_model.frag");
-    toolModelShader.Activate();
-    GLint toolTransformLoc = glGetUniformLocation(toolModelShader.ID, "transform");
-    GLint toolTimeOfDayLoc = glGetUniformLocation(toolModelShader.ID, "timeOfDay");
-    GLint toolAmbientLightLoc = glGetUniformLocation(toolModelShader.ID, "ambientLight");
-
-    Shader waterShader("water.vert", "water.frag");
-    waterShader.Activate();
-    glUniform1i(glGetUniformLocation(waterShader.ID, "textureArray"), 0);
-    GLint waterTransformLoc = glGetUniformLocation(waterShader.ID, "transform");
-    GLint waterModelLoc = glGetUniformLocation(waterShader.ID, "model");
-    GLint waterTimeLoc = glGetUniformLocation(waterShader.ID, "time");
-    GLint waterTimeOfDayLoc = glGetUniformLocation(waterShader.ID, "timeOfDay");
-    GLint waterCameraPosLoc = glGetUniformLocation(waterShader.ID, "cameraPos");
-    GLint waterSkyColorLoc = glGetUniformLocation(waterShader.ID, "skyColor");
-    GLint waterFogColorLoc = glGetUniformLocation(waterShader.ID, "fogColor");
-    GLint waterFogDensityLoc = glGetUniformLocation(waterShader.ID, "fogDensity");
-    GLint waterAmbientLightLoc = glGetUniformLocation(waterShader.ID, "ambientLight");
-    GLint waterEnableCausticsLoc = glGetUniformLocation(waterShader.ID, "enableCaustics");
-
-    const float s = 1.002f;
-    const float o = -0.001f;
-    float cubeVertices[] = {
-        o, o, s+o,  s+o, o, s+o,  s+o, s+o, s+o,  o, s+o, s+o,
-        o, o, o,  s+o, o, o,  s+o, s+o, o,  o, s+o, o,
-    };
-    unsigned int cubeIndices[] = {
-        0, 1, 1, 2, 2, 3, 3, 0,
-        4, 5, 5, 6, 6, 7, 7, 4,
-        0, 4, 1, 5, 2, 6, 3, 7
-    };
-
-    float faceVertices[] = {
-        0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
-        1.0f, 0.0f, 0.0f, 1.0f, 0.0f,
-        1.0f, 1.0f, 0.0f, 1.0f, 1.0f,
-        0.0f, 1.0f, 0.0f, 0.0f, 1.0f
-    };
-    unsigned int faceIndices[] = {
-        0, 1, 2, 2, 3, 0
-    };
-
-    GLuint selectionVAO, selectionVBO, selectionEBO;
-    glGenVertexArrays(1, &selectionVAO);
-    glGenBuffers(1, &selectionVBO);
-    glGenBuffers(1, &selectionEBO);
-
-    glBindVertexArray(selectionVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, selectionVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(cubeVertices), cubeVertices, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, selectionEBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(cubeIndices), cubeIndices, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-    glBindVertexArray(0);
-
-    GLuint faceVAO, faceVBO, faceEBO;
-    glGenVertexArrays(1, &faceVAO);
-    glGenBuffers(1, &faceVBO);
-    glGenBuffers(1, &faceEBO);
-
-    glBindVertexArray(faceVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, faceVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(faceVertices), faceVertices, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, faceEBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(faceIndices), faceIndices, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindVertexArray(0);
+    Renderer renderer;
+    renderer.init();
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -326,10 +118,7 @@ int main(int argc, char* argv[])
 
     int numWorkers = (std::max)(2, static_cast<int>(std::thread::hardware_concurrency()) - 1);
 
-    std::unique_ptr<RegionManager> regionManager;
-    std::unique_ptr<JobSystem> jobSystem;
-    std::unique_ptr<ChunkManager> chunkManager;
-    std::unique_ptr<WaterSimulator> waterSimulator;
+    WorldSession session;
 
     ParticleSystem particleSystem;
     particleSystem.init();
@@ -337,155 +126,11 @@ int main(int argc, char* argv[])
     g_player = &player;
     g_particleSystem = &particleSystem;
 
-    std::optional<RaycastHit> selectedBlock;
-
-    auto initWorld = [&](const std::string& worldName, int requestedGamemode = -1)
-    {
-      currentWorldName = worldName;
-      std::string worldPath = "saves/" + worldName;
-      std::filesystem::create_directories(worldPath);
-
-      std::string seedPath = worldPath + "/seed.dat";
-      {
-        std::ifstream seedFile(seedPath, std::ios::binary);
-        if (seedFile.is_open())
-        {
-          uint32_t savedSeed = 0;
-          seedFile.read(reinterpret_cast<char*>(&savedSeed), sizeof(savedSeed));
-          setWorldSeed(savedSeed);
-        }
-        else
-        {
-          std::random_device rd;
-          uint32_t newSeed = rd();
-          setWorldSeed(newSeed);
-          std::ofstream out(seedPath, std::ios::binary);
-          out.write(reinterpret_cast<const char*>(&newSeed), sizeof(newSeed));
-        }
-      }
-
-      regionManager = std::make_unique<RegionManager>(worldPath);
-      chunkManager = std::make_unique<ChunkManager>();
-      chunkManager->setRegionManager(regionManager.get());
-
-      jobSystem = std::make_unique<JobSystem>();
-      jobSystem->setRegionManager(regionManager.get());
-      jobSystem->setChunkManager(chunkManager.get());
-      chunkManager->setJobSystem(jobSystem.get());
-      jobSystem->start(numWorkers);
-
-      waterSimulator = std::make_unique<WaterSimulator>();
-      waterSimulator->setChunkManager(chunkManager.get());
-
-      g_chunkManager = chunkManager.get();
-      g_waterSimulator = waterSimulator.get();
-
-      PlayerData savedPlayer;
-      if (regionManager->loadPlayerData(savedPlayer))
-      {
-        player.position = glm::vec3(savedPlayer.x, savedPlayer.y, savedPlayer.z);
-        player.yaw = savedPlayer.yaw;
-        player.pitch = savedPlayer.pitch;
-        worldTime = savedPlayer.timeOfDay;
-        player.health = savedPlayer.health;
-        player.hunger = savedPlayer.hunger;
-        player.gamemode = static_cast<Gamemode>(savedPlayer.gamemode);
-        player.isDead = false;
-      }
-      else
-      {
-        player.position = glm::vec3(0.0f, 120.0f, 0.0f);
-        player.velocity = glm::vec3(0.0f);
-        player.yaw = 0.0f;
-        player.pitch = 0.0f;
-        player.health = 20.0f;
-        player.hunger = 20.0f;
-        player.gamemode = (requestedGamemode >= 0)
-            ? static_cast<Gamemode>(requestedGamemode)
-            : Gamemode::Survival;
-        player.isDead = false;
-        player.noclip = false;
-      }
-
-      std::string invPath = worldPath + "/inventory.dat";
-      if (!player.inventory.loadFromFile(invPath))
-      {
-        for (auto& s : player.inventory.slots)
-          s.clear();
-        player.inventory.selectedHotbar = 0;
-        player.inventory.heldItem.clear();
-
-        if (player.gamemode == Gamemode::Creative)
-        {
-          const uint8_t defaultBlocks[] = {1, 2, 3, 4, 5, 6, 7, 8};
-          for (int i = 0; i < 8; i++)
-          {
-            player.inventory.hotbar(i).blockId = defaultBlocks[i];
-            player.inventory.hotbar(i).count = 64;
-          }
-          player.inventory.hotbar(9).blockId = TOOL_DIAMOND_PICKAXE;
-          player.inventory.hotbar(9).count = 1;
-        }
-      }
-
-      mouseLocked = true;
-      glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-      firstMouse = true;
-      currentState = GameState::Playing;
-    };
-
-    auto shutdownWorld = [&]()
-    {
-      if (!jobSystem)
-        return;
-
-      jobSystem->stop();
-
-      PlayerData playerToSave;
-      playerToSave.version = 2;
-      playerToSave.x = player.position.x;
-      playerToSave.y = player.position.y;
-      playerToSave.z = player.position.z;
-      playerToSave.yaw = player.yaw;
-      playerToSave.pitch = player.pitch;
-      playerToSave.timeOfDay = worldTime;
-      playerToSave.health = player.health;
-      playerToSave.hunger = player.hunger;
-      playerToSave.gamemode = static_cast<int32_t>(player.gamemode);
-      regionManager->savePlayerData(playerToSave);
-
-      for (auto& pair : chunkManager->chunks)
-      {
-        Chunk* chunk = pair.second.get();
-        regionManager->saveChunkData(
-            chunk->position.x, chunk->position.y, chunk->position.z, chunk->blocks);
-      }
-      regionManager->flush();
-
-      player.inventory.heldItem.clear();
-      player.inventory.saveToFile("saves/" + currentWorldName + "/inventory.dat");
-      inventoryOpen = false;
-
-      chunkManager->chunks.clear();
-
-      g_chunkManager = nullptr;
-      g_waterSimulator = nullptr;
-
-      waterSimulator.reset();
-      chunkManager.reset();
-      jobSystem.reset();
-      regionManager.reset();
-
-      selectedBlock.reset();
-
-      mouseLocked = false;
-      glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-      currentWorldName.clear();
-    };
-
-    static float toolPosX = 0.46f, toolPosY = -0.23f, toolPosZ = -0.54f;
-    static float toolRotX = -76.0f, toolRotY = 148.0f, toolRotZ = -84.0f;
-    static float toolScale = 0.47f;
+    auto& chunkManager  = session.chunkManager;
+    auto& jobSystem      = session.jobSystem;
+    auto& waterSimulator = session.waterSimulator;
+    auto& regionManager  = session.regionManager;
+    auto& selectedBlock  = session.selectedBlock;
 
     while (!glfwWindowShouldClose(window))
     {
@@ -685,46 +330,7 @@ int main(int argc, char* argv[])
         }
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        shaderProgram.Activate();
-        glBindTexture(GL_TEXTURE_2D_ARRAY, textureArray);
-
-        if (wireframeMode)
-          glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-        else
-          glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-
-        if (chatOpen && currentState == GameState::Playing)
-        {
-          ImGui::SetNextWindowPos(ImVec2(20.0f, 20.0f), ImGuiCond_Always);
-          ImGui::SetNextWindowSize(ImVec2(600.0f, 200.0f), ImGuiCond_Always);
-          ImGui::Begin("Chat", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize);
-
-          ImGui::BeginChild("ChatLog", ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing()), false);
-          for (const auto& line : chatLog)
-            ImGui::TextUnformatted(line.c_str());
-          ImGui::EndChild();
-
-          if (chatFocusNext)
-          {
-            ImGui::SetKeyboardFocusHere();
-            chatFocusNext = false;
-          }
-
-          if (ImGui::InputText("##ChatInput", chatInput, sizeof(chatInput), ImGuiInputTextFlags_EnterReturnsTrue))
-          {
-            std::string input(chatInput);
-            chatInput[0] = 0;
-            executeCommand(input, player);
-            chatOpen = false;
-            mouseLocked = true;
-            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-            firstMouse = true;
-          }
-
-          ImGui::End();
-        }
-
-        glm::mat4 model = glm::mat4(1.0f);
+        drawChat(player, window);
 
         float effectYaw = player.yaw;
         float effectPitch = player.pitch;
@@ -756,15 +362,20 @@ int main(int argc, char* argv[])
         float aspect = static_cast<float>(fbWidth) / static_cast<float>(fbHeight);
         glm::mat4 proj = glm::perspective(glm::radians(fov), aspect, 0.1f, 1000.f);
 
-        glm::mat4 mvp = proj * view * model;
-        glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(mvp));
-        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-        glUniform1f(timeOfDayLoc, sunBrightness);
-        glUniform3fv(cameraPosLoc, 1, glm::value_ptr(eyePos));
-        glUniform3fv(skyColorLoc, 1, glm::value_ptr(clearCol));
-        glUniform3fv(fogColorLoc, 1, glm::value_ptr(fogCol));
-        glUniform1f(fogDensityLoc, effectiveFogDensity);
-        glUniform1f(ambientLightLoc, ambientLight);
+        FrameParams fp{};
+        fp.view = view;
+        fp.proj = proj;
+        fp.eyePos = eyePos;
+        fp.skyColor = skyColor;
+        fp.fogCol = fogCol;
+        fp.clearCol = clearCol;
+        fp.aspect = aspect;
+        fp.sunBrightness = sunBrightness;
+        fp.ambientLight = ambientLight;
+        fp.effectiveFogDensity = effectiveFogDensity;
+        fp.gameTime = static_cast<float>(glfwGetTime());
+
+        renderer.beginFrame(fp);
 
         int cx = static_cast<int>(std::floor(player.position.x / CHUNK_SIZE));
         int cz = static_cast<int>(std::floor(player.position.z / CHUNK_SIZE));
@@ -854,55 +465,11 @@ int main(int argc, char* argv[])
               }
             }
           }
-
-          if (chunk->indexCount > 0)
-          {
-            glm::mat4 chunkModel = glm::translate(glm::mat4(1.0f), glm::vec3(chunk->position.x * CHUNK_SIZE, chunk->position.y * CHUNK_SIZE, chunk->position.z * CHUNK_SIZE));
-            glm::mat4 chunkMVP = proj * view * chunkModel;
-            glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(chunkMVP));
-            glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(chunkModel));
-
-            glBindVertexArray(chunk->vao);
-            glDrawElements(GL_TRIANGLES, chunk->indexCount, GL_UNSIGNED_INT, 0);
-          }
         }
 
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        glDepthMask(GL_FALSE);
-
-        waterShader.Activate();
-        glBindTexture(GL_TEXTURE_2D_ARRAY, textureArray);
-
-        float gameTime = static_cast<float>(glfwGetTime());
-        glUniform1f(waterTimeLoc, gameTime);
-        glUniform1f(waterTimeOfDayLoc, sunBrightness);
-        glUniform3fv(waterCameraPosLoc, 1, glm::value_ptr(eyePos));
-        glUniform3fv(waterSkyColorLoc, 1, glm::value_ptr(skyColor));
-        glUniform3fv(waterFogColorLoc, 1, glm::value_ptr(fogCol));
-        glUniform1f(waterFogDensityLoc, effectiveFogDensity);
-        glUniform1f(waterAmbientLightLoc, ambientLight);
-        glUniform1i(waterEnableCausticsLoc, enableCaustics ? 1 : 0);
-
-        for (auto& pair : chunkManager->chunks)
-        {
-          Chunk* chunk = pair.second.get();
-          if (chunk->waterIndexCount > 0)
-          {
-            glm::mat4 chunkModel = glm::translate(glm::mat4(1.0f), glm::vec3(chunk->position.x * CHUNK_SIZE, chunk->position.y * CHUNK_SIZE, chunk->position.z * CHUNK_SIZE));
-            glm::mat4 chunkMVP = proj * view * chunkModel;
-            glUniformMatrix4fv(waterTransformLoc, 1, GL_FALSE, glm::value_ptr(chunkMVP));
-            glUniformMatrix4fv(waterModelLoc, 1, GL_FALSE, glm::value_ptr(chunkModel));
-
-            glBindVertexArray(chunk->waterVao);
-            glDrawElements(GL_TRIANGLES, chunk->waterIndexCount, GL_UNSIGNED_INT, 0);
-          }
-        }
-
-        glDepthMask(GL_TRUE);
-        glBindTexture(GL_TEXTURE_2D_ARRAY, textureArray);
-        particleSystem.render(view, proj, eyePos, sunBrightness, ambientLight);
-        glDisable(GL_BLEND);
+        renderer.renderChunks(fp, *chunkManager);
+        renderer.renderWater(fp, *chunkManager);
+        renderer.renderParticles(particleSystem, fp);
 
         if (currentState == GameState::Playing)
         {
@@ -965,406 +532,20 @@ int main(int argc, char* argv[])
             player.isBreaking = false;
         }
 
-        if (selectedBlock.has_value())
-        {
-          glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-          glLineWidth(2.0f);
-          glEnable(GL_POLYGON_OFFSET_LINE);
-          glPolygonOffset(-1.0f, -1.0f);
+        renderer.renderSelectionBox(fp, selectedBlock);
 
-          selectionShader.Activate();
-          glm::mat4 selectionModel = glm::translate(glm::mat4(1.0f),
-              glm::vec3(selectedBlock->blockPos));
-          glm::mat4 selectionMVP = proj * view * selectionModel;
-          glUniformMatrix4fv(selectionTransformLoc, 1, GL_FALSE, glm::value_ptr(selectionMVP));
-          glUniform4f(selectionColorLoc, 0.0f, 0.0f, 0.0f, 1.0f);
-
-          glBindVertexArray(selectionVAO);
-          glDrawElements(GL_LINES, 24, GL_UNSIGNED_INT, 0);
-
-          glDisable(GL_POLYGON_OFFSET_LINE);
-          glLineWidth(1.0f);
-
-          if (wireframeMode)
-            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-          else
-            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-        }
-
-        if (player.isBreaking && selectedBlock.has_value() &&
+        if (selectedBlock.has_value() && player.isBreaking &&
             selectedBlock->blockPos == player.breakingBlockPos)
-        {
-          int stage = static_cast<int>(player.breakProgress * 10.0f);
-          if (stage < 0) stage = 0;
-          if (stage > 9) stage = 9;
-          GLuint crackTex = destroyTextures[stage];
-
-          if (crackTex != 0)
-          {
-            glEnable(GL_BLEND);
-            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-            glDepthMask(GL_FALSE);
-
-            destroyShader.Activate();
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, crackTex);
-
-            glUniform1f(destroyTimeOfDayLoc, sunBrightness);
-            glUniform1f(destroyAmbientLightLoc, ambientLight);
-
-            float skyLightVal = 1.0f;
-            {
-              glm::ivec3 cpos = worldToChunk(player.breakingBlockPos.x, player.breakingBlockPos.y, player.breakingBlockPos.z);
-              Chunk* c = chunkManager->getChunk(cpos.x, cpos.y, cpos.z);
-              if (c)
-              {
-                glm::ivec3 local = worldToLocal(player.breakingBlockPos.x, player.breakingBlockPos.y, player.breakingBlockPos.z);
-                skyLightVal = static_cast<float>(c->skyLight[blockIndex(local.x, local.y, local.z)]) / static_cast<float>(MAX_SKY_LIGHT);
-              }
-            }
-            glUniform1f(destroySkyLightLoc, skyLightVal);
-
-            glm::vec3 blockPos = glm::vec3(player.breakingBlockPos);
-            const float offset = 0.001f;
-
-            const float faceShades[6] = {
-                FACE_SHADE[DIR_POS_Z],
-                FACE_SHADE[DIR_NEG_Z],
-                FACE_SHADE[DIR_POS_Y],
-                FACE_SHADE[DIR_NEG_Y],
-                FACE_SHADE[DIR_POS_X],
-                FACE_SHADE[DIR_NEG_X]
-            };
-
-            std::array<glm::mat4, 6> faceTransforms = {
-                glm::translate(glm::mat4(1.0f), blockPos + glm::vec3(0, 0, 1 + offset)),
-                glm::translate(glm::mat4(1.0f), blockPos + glm::vec3(1, 0, -offset)) * glm::rotate(glm::mat4(1.0f), glm::radians(180.0f), glm::vec3(0, 1, 0)),
-                glm::translate(glm::mat4(1.0f), blockPos + glm::vec3(0, 1 + offset, 1)) * glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1, 0, 0)),
-                glm::translate(glm::mat4(1.0f), blockPos + glm::vec3(0, -offset, 0)) * glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(1, 0, 0)),
-                glm::translate(glm::mat4(1.0f), blockPos + glm::vec3(1 + offset, 0, 1)) * glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(0, 1, 0)),
-                glm::translate(glm::mat4(1.0f), blockPos + glm::vec3(-offset, 0, 0)) * glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(0, 1, 0))
-            };
-
-            glBindVertexArray(faceVAO);
-            for (size_t i = 0; i < faceTransforms.size(); ++i)
-            {
-              const glm::mat4& ft = faceTransforms[i];
-              glUniform1f(destroyFaceShadeLoc, faceShades[i]);
-              glm::mat4 mvpFace = proj * view * ft;
-              glUniformMatrix4fv(destroyTransformLoc, 1, GL_FALSE, glm::value_ptr(mvpFace));
-              glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-            }
-            glBindVertexArray(0);
-
-            glDepthMask(GL_TRUE);
-            glDisable(GL_BLEND);
-          }
-        }
-
-        if (currentState == GameState::Playing && !inventoryOpen)
-        {
-            const ItemStack& held = player.inventory.selectedItem();
-            if (!held.isEmpty())
-            {
-                if (isToolItem(held.blockId))
-                {
-                    auto it = g_toolModels.find(held.blockId);
-                    if (it != g_toolModels.end() && it->second.indexCount > 0)
-                    {
-                        glClear(GL_DEPTH_BUFFER_BIT);
-                        if (wireframeMode)
-                            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-                        else
-                            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-
-                        toolModelShader.Activate();
-                        glUniform1f(toolTimeOfDayLoc, sunBrightness);
-                        glUniform1f(toolAmbientLightLoc, ambientLight);
-
-                        glm::mat4 handProj = glm::perspective(
-                            glm::radians(70.0f), aspect, 0.01f, 10.0f);
-
-                        glm::mat4 handModel = glm::mat4(1.0f);
-                        handModel = glm::translate(handModel,
-                            glm::vec3(toolPosX, toolPosY, toolPosZ));
-                        handModel = glm::rotate(handModel,
-                            glm::radians(toolRotZ), glm::vec3(0.0f, 0.0f, 1.0f));
-                        handModel = glm::rotate(handModel,
-                            glm::radians(toolRotY), glm::vec3(0.0f, 1.0f, 0.0f));
-                        handModel = glm::rotate(handModel,
-                            glm::radians(toolRotX), glm::vec3(1.0f, 0.0f, 0.0f));
-                        handModel = glm::scale(handModel, glm::vec3(toolScale));
-                        handModel = glm::translate(handModel,
-                            glm::vec3(-0.5f, -0.5f, -0.03125f));
-
-                        glm::mat4 handMVP = handProj * handModel;
-                        glUniformMatrix4fv(toolTransformLoc, 1, GL_FALSE,
-                            glm::value_ptr(handMVP));
-
-                        glBindVertexArray(it->second.vao);
-                        glDrawElements(GL_TRIANGLES, it->second.indexCount,
-                            GL_UNSIGNED_INT, 0);
-                        glBindVertexArray(0);
-                    }
-                }
-                else
-                {
-                    auto it = g_itemModels.find(held.blockId);
-                    if (it != g_itemModels.end() && it->second.indexCount > 0)
-                    {
-                        glClear(GL_DEPTH_BUFFER_BIT);
-                        if (wireframeMode)
-                            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-                        else
-                            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-
-                        itemModelShader.Activate();
-                        glActiveTexture(GL_TEXTURE0);
-                        glBindTexture(GL_TEXTURE_2D_ARRAY, textureArray);
-                        glUniform1f(itemTimeOfDayLoc, sunBrightness);
-                        glUniform1f(itemAmbientLightLoc, ambientLight);
-
-                        glm::mat4 handProj = glm::perspective(
-                            glm::radians(70.0f), aspect, 0.01f, 10.0f);
-
-                        glm::mat4 handModel = glm::mat4(1.0f);
-                        handModel = glm::translate(handModel,
-                            glm::vec3(0.4f, -0.36f, -0.7f));
-                        handModel = glm::rotate(handModel,
-                            glm::radians(35.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-                        handModel = glm::rotate(handModel,
-                            glm::radians(-20.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-                        handModel = glm::scale(handModel, glm::vec3(0.16f));
-                        handModel = glm::translate(handModel,
-                            glm::vec3(-0.5f, -0.5f, -0.5f));
-
-                        glm::mat4 handMVP = handProj * handModel;
-                        glUniformMatrix4fv(itemTransformLoc, 1, GL_FALSE,
-                            glm::value_ptr(handMVP));
-
-                        glBindVertexArray(it->second.vao);
-                        glDrawElements(GL_TRIANGLES, it->second.indexCount,
-                            GL_UNSIGNED_INT, 0);
-                        glBindVertexArray(0);
-                    }
-                }
-            }
-        }
-
-        if (showDebugMenu && currentState == GameState::Playing)
-        {
-          ImGuiWindowFlags debugFlags = 0;
-          if (mouseLocked)
-            debugFlags |= ImGuiWindowFlags_NoInputs;
-          ImGui::Begin("Debug", nullptr, debugFlags);
-
-          if (ImGui::BeginTabBar("DebugTabs"))
-          {
-            if (ImGui::BeginTabItem("Info"))
-            {
-              ImGui::Text("FPS: %.1f", fps);
-              ImGui::Text("Position: (%.2f, %.2f, %.2f)",
-                          player.position.x, player.position.y, player.position.z);
-              ImGui::Text("Velocity: (%.2f, %.2f, %.2f)",
-                          player.velocity.x, player.velocity.y, player.velocity.z);
-              ImGui::Text("Yaw: %.1f, Pitch: %.1f", player.yaw, player.pitch);
-              ImGui::Text("On Ground: %s", player.onGround ? "Yes" : "No");
-
-              int chunkXDbg = static_cast<int>(floor(player.position.x / 16.0f));
-              int chunkZDbg = static_cast<int>(floor(player.position.z / 16.0f));
-              ImGui::Text("Chunk: (%d, %d)", chunkXDbg, chunkZDbg);
-
-              if (selectedBlock.has_value())
-              {
-                ImGui::Separator();
-                ImGui::Text("Selected Block: (%d, %d, %d)",
-                    selectedBlock->blockPos.x,
-                    selectedBlock->blockPos.y,
-                    selectedBlock->blockPos.z);
-                uint8_t blockId = getBlockAtWorld(
-                    selectedBlock->blockPos.x,
-                    selectedBlock->blockPos.y,
-                    selectedBlock->blockPos.z,
-                    *chunkManager);
-                ImGui::Text("Block ID: %d", blockId);
-                ImGui::Text("Distance: %.2f", selectedBlock->distance);
-              }
-              else
-              {
-                ImGui::Separator();
-                ImGui::Text("No block selected");
-              }
-
-              ImGui::Separator();
-
-              const char* blockNames[] = {"Air", "Dirt", "Grass", "Stone", "Sand", "Oak Log", "Oak Leaves", "Glass", "Oak Planks", "Water"};
-              const ItemStack& heldBlock = player.inventory.selectedItem();
-              if (!heldBlock.isEmpty() && heldBlock.blockId < 10)
-                ImGui::Text("Holding: %s x%d", blockNames[heldBlock.blockId], heldBlock.count);
-              else if (!heldBlock.isEmpty())
-                ImGui::Text("Holding: Block %d x%d", heldBlock.blockId, heldBlock.count);
-              else
-                ImGui::Text("Holding: Empty");
-              ImGui::Text("Slot: %d/9", player.inventory.selectedHotbar + 1);
-
-              ImGui::Separator();
-              ImGui::Text("LMB: Break block");
-              ImGui::Text("RMB: Place block");
-              ImGui::Text("Space: Jump");
-
-              ImGui::Separator();
-              ImGui::Text("Chunks loaded: %zu", chunkManager->chunks.size());
-              ImGui::Text("Chunks loading: %zu", chunkManager->loadingChunks.size());
-              ImGui::Text("Chunks meshing: %zu", chunkManager->meshingChunks.size());
-              ImGui::Text("Jobs pending: %zu", jobSystem->pendingJobCount());
-
-              ImGui::EndTabItem();
-            }
-
-            if (ImGui::BeginTabItem("Settings"))
-            {
-              ImGui::SliderInt("Render Distance", &renderDistance, 2, 16);
-
-              ImGui::Separator();
-              ImGui::Checkbox("Wireframe mode", &wireframeMode);
-              ImGui::Checkbox("Noclip mode", &player.noclip);
-              ImGui::Checkbox("Async Loading", &useAsyncLoading);
-              ImGui::SliderFloat("Move Speed", &cameraSpeed, 0.0f, 60.0f);
-
-              ImGui::Separator();
-              ImGui::InputInt("Max FPS", &targetFps);
-              if (targetFps < 10) targetFps = 10;
-              if (targetFps > 1000) targetFps = 1000;
-
-              ImGui::Separator();
-              ImGui::Text("DAY/NIGHT CYCLE");
-              ImGui::Checkbox("Auto Time", &autoTimeProgression);
-              ImGui::SliderFloat("Time of Day", &worldTime, 0.0f, 1.0f, "%.2f");
-              ImGui::SliderFloat("Day Length (s)", &dayLength, 60.0f, 1200.0f);
-              ImGui::SliderFloat("Fog Density", &fogDensity, 0.001f, 0.05f, "%.4f");
-
-              const char* timeNames[] = {"Midnight", "Dawn", "Morning", "Noon", "Afternoon", "Dusk", "Evening", "Night"};
-              int timeIndex = static_cast<int>(worldTime * 8.0f) % 8;
-              ImGui::Text("Current: %s (Sun: %.0f%%)", timeNames[timeIndex], rawSunBrightness * 100.0f);
-
-              ImGui::Separator();
-              ImGui::Text("WATER");
-              ImGui::Checkbox("Caustics", &enableCaustics);
-              ImGui::Checkbox("Water Physics", &enableWaterSimulation);
-              if (enableWaterSimulation)
-              {
-                ImGui::SliderInt("Water Tick Rate", &waterTickRate, 1, 20);
-                waterSimulator->setTickRate(waterTickRate);
-              }
-              if (isUnderwater)
-              {
-                ImGui::TextColored(ImVec4(0.2f, 0.6f, 1.0f, 1.0f), "UNDERWATER");
-              }
-              ImGui::EndTabItem();
-            }
-
-            if (ImGui::BeginTabItem("Tool Transform"))
-            {
-              ImGui::Text("POSITION");
-              ImGui::SliderFloat("Pos X", &toolPosX, -1.0f, 1.0f, "%.3f");
-              ImGui::SliderFloat("Pos Y", &toolPosY, -1.0f, 1.0f, "%.3f");
-              ImGui::SliderFloat("Pos Z", &toolPosZ, -2.0f, 0.0f, "%.3f");
-
-              ImGui::Separator();
-              ImGui::Text("ROTATION");
-              ImGui::SliderFloat("Rot X", &toolRotX, -180.0f, 180.0f, "%.1f");
-              ImGui::SliderFloat("Rot Y", &toolRotY, -180.0f, 180.0f, "%.1f");
-              ImGui::SliderFloat("Rot Z", &toolRotZ, -180.0f, 180.0f, "%.1f");
-
-              ImGui::Separator();
-              ImGui::SliderFloat("Scale", &toolScale, 0.1f, 2.0f, "%.3f");
-
-              ImGui::Separator();
-              if (ImGui::Button("Reset"))
-              {
-                toolPosX = 0.46f; toolPosY = -0.23f; toolPosZ = -0.54f;
-                toolRotX = -76.0f; toolRotY = 148.0f; toolRotZ = -84.0f;
-                toolScale = 0.47f;
-              }
-              ImGui::SameLine();
-              ImGui::Text("  X:%.2f Y:%.2f Z:%.2f  rX:%.0f rY:%.0f rZ:%.0f  s:%.2f",
-                  toolPosX, toolPosY, toolPosZ, toolRotX, toolRotY, toolRotZ, toolScale);
-
-              ImGui::EndTabItem();
-            }
-
-            ImGui::EndTabBar();
-          }
-
-          ImGui::End();
-
-          ImGui::Begin("Fun Bullshit", nullptr, debugFlags);
-
-          if (ImGui::Button("Randomize Block Textures"))
-          {
-            randomizeBlockTextures();
-            for (auto& pair : chunkManager->chunks)
-              pair.second->dirtyMesh = true;
-          }
-
-          if (ImGui::Button("Reset Block Textures"))
-          {
-            resetBlockTextures();
-            for (auto& pair : chunkManager->chunks)
-              pair.second->dirtyMesh = true;
-          }
-
-          ImGui::Separator();
-          ImGui::Text("VISUAL CHAOS");
-
-          ImGui::Checkbox("Drunk Mode", &drunkMode);
-          if (drunkMode)
-            ImGui::SliderFloat("Drunk Intensity", &drunkIntensity, 0.1f, 5.0f);
-
-          ImGui::Checkbox("Disco Mode", &discoMode);
-          if (discoMode)
-            ImGui::SliderFloat("Disco Speed", &discoSpeed, 1.0f, 50.0f);
-
-          ImGui::Checkbox("Earthquake", &earthquakeMode);
-          if (earthquakeMode)
-            ImGui::SliderFloat("Quake Intensity", &earthquakeIntensity, 0.05f, 2.0f);
-
-          ImGui::End();
-        }
+          renderer.renderDestroyOverlay(fp, player, *chunkManager);
 
         if (currentState == GameState::Playing)
-        {
-          ImDrawList* drawList = ImGui::GetForegroundDrawList();
+          renderer.renderHeldItem(fp, player);
 
-          if (player.gamemode == Gamemode::Survival)
-            drawSurvivalHud(player, fbWidth, fbHeight);
+        drawDebugUI(player, chunkManager.get(), jobSystem.get(),
+            waterSimulator.get(), selectedBlock, rawSunBrightness, useAsyncLoading);
 
-          if (!inventoryOpen)
-          {
-            ImVec2 center(fbWidth * 0.5f, fbHeight * 0.5f);
-            float crosshairSize = 10.0f;
-            float crosshairThickness = 2.0f;
-            ImU32 crosshairColor = IM_COL32(255, 255, 255, 200);
-
-            drawList->AddLine(
-                ImVec2(center.x - crosshairSize, center.y),
-                ImVec2(center.x + crosshairSize, center.y),
-                crosshairColor, crosshairThickness);
-            drawList->AddLine(
-                ImVec2(center.x, center.y - crosshairSize),
-                ImVec2(center.x, center.y + crosshairSize),
-                crosshairColor, crosshairThickness);
-          }
-
-          drawHotbar(player.inventory, fbWidth, fbHeight);
-          if (inventoryOpen)
-          {
-            if (player.gamemode == Gamemode::Creative)
-              drawCreativeInventoryScreen(player.inventory, fbWidth, fbHeight);
-            else
-              drawInventoryScreen(player.inventory, fbWidth, fbHeight);
-          }
-        }
+        if (currentState == GameState::Playing)
+            drawGameHUD(player, fbWidth, fbHeight, inventoryOpen);
       }
       else
       {
@@ -1392,7 +573,7 @@ int main(int argc, char* argv[])
         auto result = drawWorldSelect(fbWidth, fbHeight);
         if (result.nextState == GameState::Playing && !result.selectedWorld.empty())
         {
-          initWorld(result.selectedWorld, result.gamemode);
+          session.init(result.selectedWorld, result.gamemode, player, window, numWorkers);
         }
         else if (result.nextState != GameState::WorldSelect)
         {
@@ -1405,7 +586,7 @@ int main(int argc, char* argv[])
         auto result = drawPauseMenu(fbWidth, fbHeight);
         if (result.nextState == GameState::MainMenu)
         {
-          shutdownWorld();
+          session.shutdown(player, window);
           currentState = GameState::MainMenu;
         }
         else if (result.nextState == GameState::Settings)
@@ -1452,34 +633,13 @@ int main(int argc, char* argv[])
       glfwPollEvents();
     }
 
-    shutdownWorld();
+    session.shutdown(player, window);
 
-    glDeleteVertexArrays(1, &selectionVAO);
-    glDeleteBuffers(1, &selectionVBO);
-    glDeleteBuffers(1, &selectionEBO);
-    glDeleteVertexArrays(1, &faceVAO);
-    glDeleteBuffers(1, &faceVBO);
-    glDeleteBuffers(1, &faceEBO);
-    selectionShader.Delete();
-    destroyShader.Delete();
-    waterShader.Delete();
-    itemModelShader.Delete();
-    toolModelShader.Delete();
-
-    for (GLuint tex : destroyTextures)
-    {
-      if (tex != 0)
-        glDeleteTextures(1, &tex);
-    }
-    unloadBlockIcons();
-    unloadItemModels();
-    unloadToolModels();
+    renderer.cleanup();
 
     ImGui_ImplGlfw_Shutdown();
     ImGui_ImplOpenGL3_Shutdown();
     ImGui::DestroyContext();
-
-    shaderProgram.Delete();
 
     glfwDestroyWindow(window);
     glfwTerminate();

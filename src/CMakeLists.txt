@@ -23,6 +23,10 @@ set(SOURCES
     rendering/ParticleSystem.cpp
     rendering/ItemModelGenerator.cpp
     rendering/ToolModelGenerator.cpp
+    ui/DebugUI.cpp
+    ui/HUD.cpp
+    core/WorldSession.cpp
+    core/Renderer.cpp
 )
 
 add_executable(VoxelEngine ${SOURCES})
