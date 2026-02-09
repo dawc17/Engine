@@ -9,6 +9,7 @@ struct MenuResult
     GameState nextState;
     std::string selectedWorld;
     bool shouldQuit;
+    int gamemode;
 };
 
 MenuResult drawMainMenu(int fbWidth, int fbHeight);

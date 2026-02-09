@@ -46,6 +46,7 @@
 
 // system and thirdparty
 #include "../thirdparty/stb_image.h"
+#include "../world/TerrainGenerator.h"
 #include <memory>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -53,6 +54,9 @@
 #include <array>
 #include <cstdlib>
 #include <exception>
+#include <filesystem>
+#include <fstream>
+#include <random>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -85,6 +89,7 @@ int main(int argc, char* argv[])
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
+    glfwWindowHint(GLFW_MAXIMIZED, GLFW_TRUE);
     GLFWwindow *window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT,
                                           "VoxelEngine", NULL, NULL);
     if (window == NULL)
@@ -334,10 +339,30 @@ int main(int argc, char* argv[])
 
     std::optional<RaycastHit> selectedBlock;
 
-    auto initWorld = [&](const std::string& worldName)
+    auto initWorld = [&](const std::string& worldName, int requestedGamemode = -1)
     {
       currentWorldName = worldName;
       std::string worldPath = "saves/" + worldName;
+      std::filesystem::create_directories(worldPath);
+
+      std::string seedPath = worldPath + "/seed.dat";
+      {
+        std::ifstream seedFile(seedPath, std::ios::binary);
+        if (seedFile.is_open())
+        {
+          uint32_t savedSeed = 0;
+          seedFile.read(reinterpret_cast<char*>(&savedSeed), sizeof(savedSeed));
+          setWorldSeed(savedSeed);
+        }
+        else
+        {
+          std::random_device rd;
+          uint32_t newSeed = rd();
+          setWorldSeed(newSeed);
+          std::ofstream out(seedPath, std::ios::binary);
+          out.write(reinterpret_cast<const char*>(&newSeed), sizeof(newSeed));
+        }
+      }
 
       regionManager = std::make_unique<RegionManager>(worldPath);
       chunkManager = std::make_unique<ChunkManager>();
@@ -375,7 +400,9 @@ int main(int argc, char* argv[])
         player.pitch = 0.0f;
         player.health = 20.0f;
         player.hunger = 20.0f;
-        player.gamemode = Gamemode::Survival;
+        player.gamemode = (requestedGamemode >= 0)
+            ? static_cast<Gamemode>(requestedGamemode)
+            : Gamemode::Survival;
         player.isDead = false;
         player.noclip = false;
       }
@@ -455,6 +482,10 @@ int main(int argc, char* argv[])
       glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
       currentWorldName.clear();
     };
+
+    static float toolPosX = 0.46f, toolPosY = -0.23f, toolPosZ = -0.54f;
+    static float toolRotX = -76.0f, toolRotY = 148.0f, toolRotZ = -84.0f;
+    static float toolScale = 0.47f;
 
     while (!glfwWindowShouldClose(window))
     {
@@ -1055,14 +1086,14 @@ int main(int argc, char* argv[])
 
                         glm::mat4 handModel = glm::mat4(1.0f);
                         handModel = glm::translate(handModel,
-                            glm::vec3(0.35f, -0.45f, -0.6f));
+                            glm::vec3(toolPosX, toolPosY, toolPosZ));
                         handModel = glm::rotate(handModel,
-                            glm::radians(-10.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+                            glm::radians(toolRotZ), glm::vec3(0.0f, 0.0f, 1.0f));
                         handModel = glm::rotate(handModel,
-                            glm::radians(25.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+                            glm::radians(toolRotY), glm::vec3(0.0f, 1.0f, 0.0f));
                         handModel = glm::rotate(handModel,
-                            glm::radians(-15.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-                        handModel = glm::scale(handModel, glm::vec3(0.55f));
+                            glm::radians(toolRotX), glm::vec3(1.0f, 0.0f, 0.0f));
+                        handModel = glm::scale(handModel, glm::vec3(toolScale));
                         handModel = glm::translate(handModel,
                             glm::vec3(-0.5f, -0.5f, -0.03125f));
 
@@ -1232,6 +1263,36 @@ int main(int argc, char* argv[])
               ImGui::EndTabItem();
             }
 
+            if (ImGui::BeginTabItem("Tool Transform"))
+            {
+              ImGui::Text("POSITION");
+              ImGui::SliderFloat("Pos X", &toolPosX, -1.0f, 1.0f, "%.3f");
+              ImGui::SliderFloat("Pos Y", &toolPosY, -1.0f, 1.0f, "%.3f");
+              ImGui::SliderFloat("Pos Z", &toolPosZ, -2.0f, 0.0f, "%.3f");
+
+              ImGui::Separator();
+              ImGui::Text("ROTATION");
+              ImGui::SliderFloat("Rot X", &toolRotX, -180.0f, 180.0f, "%.1f");
+              ImGui::SliderFloat("Rot Y", &toolRotY, -180.0f, 180.0f, "%.1f");
+              ImGui::SliderFloat("Rot Z", &toolRotZ, -180.0f, 180.0f, "%.1f");
+
+              ImGui::Separator();
+              ImGui::SliderFloat("Scale", &toolScale, 0.1f, 2.0f, "%.3f");
+
+              ImGui::Separator();
+              if (ImGui::Button("Reset"))
+              {
+                toolPosX = 0.46f; toolPosY = -0.23f; toolPosZ = -0.54f;
+                toolRotX = -76.0f; toolRotY = 148.0f; toolRotZ = -84.0f;
+                toolScale = 0.47f;
+              }
+              ImGui::SameLine();
+              ImGui::Text("  X:%.2f Y:%.2f Z:%.2f  rX:%.0f rY:%.0f rZ:%.0f  s:%.2f",
+                  toolPosX, toolPosY, toolPosZ, toolRotX, toolRotY, toolRotZ, toolScale);
+
+              ImGui::EndTabItem();
+            }
+
             ImGui::EndTabBar();
           }
 
@@ -1331,7 +1392,7 @@ int main(int argc, char* argv[])
         auto result = drawWorldSelect(fbWidth, fbHeight);
         if (result.nextState == GameState::Playing && !result.selectedWorld.empty())
         {
-          initWorld(result.selectedWorld);
+          initWorld(result.selectedWorld, result.gamemode);
         }
         else if (result.nextState != GameState::WorldSelect)
         {

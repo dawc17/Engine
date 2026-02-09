@@ -28,6 +28,7 @@ Player::Player()
     , pitch(0.0f)
     , onGround(false)
     , noclip(false)
+    , flying(false)
     , gamemode(Gamemode::Creative)
     , health(20.0f)
     , hunger(20.0f)
@@ -76,7 +77,7 @@ void Player::applyMovement(const glm::vec3& inputDir, float speed)
     velocity.x = normalizedInput.x * speed;
     velocity.z = normalizedInput.z * speed;
     
-    if (noclip)
+    if (noclip || flying)
     {
       velocity.y = normalizedInput.y * speed;
     }
@@ -86,7 +87,7 @@ void Player::applyMovement(const glm::vec3& inputDir, float speed)
     velocity.x = 0.0f;
     velocity.z = 0.0f;
     
-    if (noclip)
+    if (noclip || flying)
     {
       velocity.y = 0.0f;
     }
@@ -212,10 +213,12 @@ void Player::update(float dt, ChunkManager& chunkManager)
     return;
   }
   
-  velocity.y -= GRAVITY * dt;
-  
-  if (velocity.y < -TERMINAL_VELOCITY)
-    velocity.y = -TERMINAL_VELOCITY;
+  if (!flying)
+  {
+    velocity.y -= GRAVITY * dt;
+    if (velocity.y < -TERMINAL_VELOCITY)
+      velocity.y = -TERMINAL_VELOCITY;
+  }
   
   glm::vec3 movement = velocity * dt;
   

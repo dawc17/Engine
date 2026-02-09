@@ -3,10 +3,10 @@
 #include <cmath>
 #include <cstdint>
 
-static const siv::PerlinNoise::seed_type TERRAIN_SEED = 6767420;
-static const siv::PerlinNoise perlin{TERRAIN_SEED};
-static const siv::PerlinNoise perlinDetail{TERRAIN_SEED + 1};
-static const siv::PerlinNoise perlinTrees{TERRAIN_SEED + 2};
+static siv::PerlinNoise::seed_type TERRAIN_SEED = 6767420;
+static siv::PerlinNoise perlin{TERRAIN_SEED};
+static siv::PerlinNoise perlinDetail{TERRAIN_SEED + 1};
+static siv::PerlinNoise perlinTrees{TERRAIN_SEED + 2};
 
 constexpr int BASE_HEIGHT = 100;
 constexpr int HEIGHT_VARIATION = 40;
@@ -235,4 +235,12 @@ void getTerrainHeightsForChunk(int cx, int cz, int* outHeights)
 uint32_t getWorldSeed()
 {
     return static_cast<uint32_t>(TERRAIN_SEED);
+}
+
+void setWorldSeed(uint32_t seed)
+{
+    TERRAIN_SEED = seed;
+    perlin.reseed(TERRAIN_SEED);
+    perlinDetail.reseed(TERRAIN_SEED + 1);
+    perlinTrees.reseed(TERRAIN_SEED + 2);
 }

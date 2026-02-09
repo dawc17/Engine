@@ -8,6 +8,7 @@
 #include <vector>
 
 static char newWorldName[64] = {};
+static int newWorldGamemode = 1;
 
 static void centerText(const char* text)
 {
@@ -92,8 +93,9 @@ MenuResult drawWorldSelect(int fbWidth, int fbHeight)
     MenuResult result;
     result.nextState = GameState::WorldSelect;
     result.shouldQuit = false;
+    result.gamemode = -1;
 
-    ImVec2 windowSize(500.0f, 450.0f);
+    ImVec2 windowSize(500.0f, 500.0f);
     ImVec2 windowPos((fbWidth - windowSize.x) * 0.5f, (fbHeight - windowSize.y) * 0.5f);
 
     ImGui::SetNextWindowPos(windowPos, ImGuiCond_Always);
@@ -132,11 +134,18 @@ MenuResult drawWorldSelect(int fbWidth, int fbHeight)
     ImGui::SetNextItemWidth(200.0f);
     bool enterPressed = ImGui::InputText("##NewWorldName", newWorldName, sizeof(newWorldName),
         ImGuiInputTextFlags_EnterReturnsTrue);
+
+    const char* gamemodeNames[] = {"Survival", "Creative"};
+    ImGui::Text("Gamemode:");
     ImGui::SameLine();
+    ImGui::SetNextItemWidth(200.0f);
+    ImGui::Combo("##Gamemode", &newWorldGamemode, gamemodeNames, 2);
+
     if ((ImGui::Button("Create") || enterPressed) && newWorldName[0] != '\0')
     {
         result.nextState = GameState::Playing;
         result.selectedWorld = std::string(newWorldName);
+        result.gamemode = newWorldGamemode;
         newWorldName[0] = '\0';
     }
 

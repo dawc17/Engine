@@ -40,7 +40,8 @@ struct Player
   float pitch;
   
   bool onGround;
-  bool noclip;  
+  bool noclip;
+  bool flying;
   Gamemode gamemode;
 
   float health;
