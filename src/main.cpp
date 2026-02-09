@@ -27,6 +27,7 @@
 #include "SurvivalSystem.h"
 #include "Inventory.h"
 #include "GameState.h"
+#include "ItemModelGenerator.h"
 #include "MainMenu.h"
 #include <memory>
 
@@ -190,6 +191,7 @@ int main(int argc, char* argv[])
     // Load HUD block icons
     std::string hudIconPath = resolveTexturePath("assets/textures/hud_blocks");
     loadBlockIcons(hudIconPath);
+    loadItemModels();
 
     GLuint destroyTextures[10] = {};
     for (int i = 0; i < 10; ++i)
@@ -211,6 +213,13 @@ int main(int argc, char* argv[])
     GLint destroyAmbientLightLoc = glGetUniformLocation(destroyShader.ID, "ambientLight");
     GLint destroySkyLightLoc = glGetUniformLocation(destroyShader.ID, "SkyLight");
     GLint destroyFaceShadeLoc = glGetUniformLocation(destroyShader.ID, "FaceShade");
+
+    Shader itemModelShader("item_model.vert", "item_model.frag");
+    itemModelShader.Activate();
+    glUniform1i(glGetUniformLocation(itemModelShader.ID, "textureArray"), 0);
+    GLint itemTransformLoc = glGetUniformLocation(itemModelShader.ID, "transform");
+    GLint itemTimeOfDayLoc = glGetUniformLocation(itemModelShader.ID, "timeOfDay");
+    GLint itemAmbientLightLoc = glGetUniformLocation(itemModelShader.ID, "ambientLight");
 
     Shader waterShader("water.vert", "water.frag");
     waterShader.Activate();
@@ -1015,6 +1024,52 @@ int main(int argc, char* argv[])
           }
         }
 
+        if (currentState == GameState::Playing && !inventoryOpen)
+        {
+            const ItemStack& held = player.inventory.selectedItem();
+            if (!held.isEmpty())
+            {
+                auto it = g_itemModels.find(held.blockId);
+                if (it != g_itemModels.end() && it->second.indexCount > 0)
+                {
+                    glClear(GL_DEPTH_BUFFER_BIT);
+                    if (wireframeMode)
+                        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+                    else
+                        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+                    itemModelShader.Activate();
+                    glActiveTexture(GL_TEXTURE0);
+                    glBindTexture(GL_TEXTURE_2D_ARRAY, textureArray);
+                    glUniform1f(itemTimeOfDayLoc, sunBrightness);
+                    glUniform1f(itemAmbientLightLoc, ambientLight);
+
+                    glm::mat4 handProj = glm::perspective(
+                        glm::radians(70.0f), aspect, 0.01f, 10.0f);
+
+                    glm::mat4 handModel = glm::mat4(1.0f);
+                    handModel = glm::translate(handModel,
+                        glm::vec3(0.4f, -0.36f, -0.7f));
+                    handModel = glm::rotate(handModel,
+                        glm::radians(35.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+                    handModel = glm::rotate(handModel,
+                        glm::radians(-20.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+                    handModel = glm::scale(handModel, glm::vec3(0.16f));
+                    handModel = glm::translate(handModel,
+                        glm::vec3(-0.5f, -0.5f, -0.5f));
+
+                    glm::mat4 handMVP = handProj * handModel;
+                    glUniformMatrix4fv(itemTransformLoc, 1, GL_FALSE,
+                        glm::value_ptr(handMVP));
+
+                    glBindVertexArray(it->second.vao);
+                    glDrawElements(GL_TRIANGLES, it->second.indexCount,
+                        GL_UNSIGNED_INT, 0);
+                    glBindVertexArray(0);
+                }
+            }
+        }
+
         if (showDebugMenu && currentState == GameState::Playing)
         {
           ImGuiWindowFlags debugFlags = 0;
@@ -1292,6 +1347,7 @@ int main(int argc, char* argv[])
     selectionShader.Delete();
     destroyShader.Delete();
     waterShader.Delete();
+    itemModelShader.Delete();
 
     for (GLuint tex : destroyTextures)
     {
@@ -1299,6 +1355,7 @@ int main(int argc, char* argv[])
         glDeleteTextures(1, &tex);
     }
     unloadBlockIcons();
+    unloadItemModels();
 
     ImGui_ImplGlfw_Shutdown();
     ImGui_ImplOpenGL3_Shutdown();

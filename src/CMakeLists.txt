@@ -21,6 +21,7 @@ set(SOURCES
     CaveGenerator.cpp
     WaterSimulator.cpp
     ParticleSystem.cpp
+    ItemModelGenerator.cpp
 )
 
 add_executable(VoxelEngine ${SOURCES})
@@ -36,6 +37,8 @@ set(SHADER_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/water.frag
     ${CMAKE_CURRENT_SOURCE_DIR}/particle.vert
     ${CMAKE_CURRENT_SOURCE_DIR}/particle.frag
+    ${CMAKE_CURRENT_SOURCE_DIR}/item_model.vert
+    ${CMAKE_CURRENT_SOURCE_DIR}/item_model.frag
 )
 
 add_custom_target(copy_shaders ALL
