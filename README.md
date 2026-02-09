@@ -4,6 +4,8 @@ welcome to my small minecraft clone (maybe something more in the future) made in
 
 one day a few years ago i had this very specific itch that i never quite got to scratching, so recently i decided it was finally time. this is the result!
 
+<img width="1919" height="994" alt="image" src="https://github.com/user-attachments/assets/e0aed9a9-35a7-43ec-b5aa-10199390482a" />
+
 ## technical details
 - **chunk streaming**: streams a configurable radius of chunks around the player with async load/save through a multi‑threaded job system.
 - **procedural terrain**: fbm‑style terrain with stone/dirt/grass/sand strata, sea level water fill, and tree decorator.
@@ -85,6 +87,8 @@ zip the `release/` folder and share it. saves are created in a `saves/` folder n
 
 ## debug menu
 
+to be able to access the debug menu, run the executable with the `--debug` argument in the terminal.
+
 the imgui debug window provides:
 
 - fps, player position/velocity/orientation
@@ -98,13 +102,6 @@ the imgui debug window provides:
 - water controls (simulation tick rate, caustics)
 - fun modes (drunk / disco / earthquake)
 - block texture randomizer/reset
-
-## survival hud
-
-- health + hunger bars at the bottom left
-- drowning damage when fully submerged
-- fall damage and hunger drain
-- "you died – press R" respawn hint
 
 ## troubleshooting
 
