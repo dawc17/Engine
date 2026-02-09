@@ -14,7 +14,7 @@ Chunk::Chunk()
     : position(0)
 {
   std::fill(std::begin(blocks), std::end(blocks), 0);
-  std::fill(std::begin(skyLight), std::end(skyLight), MAX_SKY_LIGHT);  // Default to full light
+  std::fill(std::begin(skyLight), std::end(skyLight), MAX_SKY_LIGHT);
 }
 
 Chunk::~Chunk()
