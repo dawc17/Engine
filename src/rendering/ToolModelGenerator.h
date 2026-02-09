@@ -25,5 +25,13 @@ constexpr uint8_t TOOL_DIAMOND_PICKAXE = 128;
 inline bool isToolItem(uint8_t id) { return id >= TOOL_ID_START; }
 
 class ToolModelGenerator {
-
+    public:
+    static ToolModel generateFromSprite(const std::string& imagePath);
+    static void destroyModel(ToolModel& model);
 };
+
+extern std::unordered_map<uint8_t, ToolModel> g_toolModels;
+extern std::unordered_map<uint8_t, GLuint> g_toolIcons;
+
+void loadToolModels();
+void unloadToolModels();

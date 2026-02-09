@@ -1,11 +1,29 @@
 #include "Inventory.h"
 #include "../core/MainGlobals.h"
+#include "../rendering/ToolModelGenerator.h"
 #include "../../libs/imgui/imgui.h"
 #include <algorithm>
 #include <cstdint>
 #include <fstream>
 #include <cstdio>
 #include <utility>
+#include <vector>
+
+const std::vector<CreativeItem>& getCreativeItems()
+{
+    static const std::vector<CreativeItem> items = {
+        {1, "Dirt"},
+        {2, "Grass"},
+        {3, "Stone"},
+        {4, "Sand"},
+        {5, "Oak Log"},
+        {6, "Oak Leaves"},
+        {7, "Glass"},
+        {8, "Oak Planks"},
+        {TOOL_DIAMOND_PICKAXE, "Diamond Pickaxe"},
+    };
+    return items;
+}
 
 Inventory::Inventory()
     : selectedHotbar(0)
@@ -200,12 +218,22 @@ static void drawSlotWidget(Inventory& inv, int slotIdx, float slotSize, bool isS
     const ItemStack& item = inv.slot(slotIdx);
     if (!item.isEmpty())
     {
-        auto iconIt = g_blockIcons.find(item.blockId);
-        if (iconIt != g_blockIcons.end())
+        GLuint iconTex = 0;
+        if (isToolItem(item.blockId))
+        {
+            auto it = g_toolIcons.find(item.blockId);
+            if (it != g_toolIcons.end()) iconTex = it->second;
+        }
+        else
+        {
+            auto it = g_blockIcons.find(item.blockId);
+            if (it != g_blockIcons.end()) iconTex = it->second;
+        }
+        if (iconTex != 0)
         {
             float pad = 4.0f;
             dl->AddImage(
-                (ImTextureID)(intptr_t)iconIt->second,
+                (ImTextureID)(intptr_t)iconTex,
                 ImVec2(pos.x + pad, pos.y + pad),
                 ImVec2(pos.x + slotSize - pad, pos.y + slotSize - pad));
         }
@@ -256,12 +284,22 @@ void drawHotbar(const Inventory &inv, int fbWidth, int fbHeight)
             const ItemStack& item = inv.hotbar(i);
             if (!item.isEmpty())
             {
-                auto iconIt = g_blockIcons.find(item.blockId);
-                if (iconIt != g_blockIcons.end())
+                GLuint iconTex = 0;
+                if (isToolItem(item.blockId))
+                {
+                    auto it = g_toolIcons.find(item.blockId);
+                    if (it != g_toolIcons.end()) iconTex = it->second;
+                }
+                else
+                {
+                    auto it = g_blockIcons.find(item.blockId);
+                    if (it != g_blockIcons.end()) iconTex = it->second;
+                }
+                if (iconTex != 0)
                 {
                     float pad = 4.0f;
                     dl->AddImage(
-                        (ImTextureID)(intptr_t)iconIt->second,
+                        (ImTextureID)(intptr_t)iconTex,
                         ImVec2(x + pad, y + pad),
                         ImVec2(x + slotSize - pad, y + slotSize - pad));
                 }
@@ -338,11 +376,142 @@ void drawInventoryScreen(Inventory &inv, int fbWidth, int fbHeight)
         ImVec2 mousePos = ImGui::GetMousePos();
         float halfSlot = slotSize * 0.5f;
 
-        auto iconIt = g_blockIcons.find(inv.heldItem.blockId);
-        if (iconIt != g_blockIcons.end())
+        GLuint heldTex = 0;
+        if (isToolItem(inv.heldItem.blockId))
+        {
+            auto it = g_toolIcons.find(inv.heldItem.blockId);
+            if (it != g_toolIcons.end()) heldTex = it->second;
+        }
+        else
+        {
+            auto it = g_blockIcons.find(inv.heldItem.blockId);
+            if (it != g_blockIcons.end()) heldTex = it->second;
+        }
+        if (heldTex != 0)
         {
             dl->AddImage(
-                (ImTextureID)(intptr_t)iconIt->second,
+                (ImTextureID)(intptr_t)heldTex,
+                ImVec2(mousePos.x - halfSlot + 4.0f, mousePos.y - halfSlot + 4.0f),
+                ImVec2(mousePos.x + halfSlot - 4.0f, mousePos.y + halfSlot - 4.0f));
+        }
+
+        if (inv.heldItem.count > 1)
+        {
+            char buf[8];
+            std::snprintf(buf, sizeof(buf), "%d", inv.heldItem.count);
+            dl->AddText(ImVec2(mousePos.x + 4.0f, mousePos.y + 4.0f), IM_COL32(255, 255, 255, 255), buf);
+        }
+    }
+}
+
+static GLuint getItemIcon(uint8_t id)
+{
+    if (isToolItem(id))
+    {
+        auto it = g_toolIcons.find(id);
+        if (it != g_toolIcons.end()) return it->second;
+    }
+    else
+    {
+        auto it = g_blockIcons.find(id);
+        if (it != g_blockIcons.end()) return it->second;
+    }
+    return 0;
+}
+
+void drawCreativeInventoryScreen(Inventory& inv, int fbWidth, int fbHeight)
+{
+    const auto& items = getCreativeItems();
+    int catalogRows = (static_cast<int>(items.size()) + HOTBAR_SLOTS - 1) / HOTBAR_SLOTS;
+
+    float slotSize = 52.0f;
+    float slotSpacing = 4.0f;
+    float windowWidth = HOTBAR_SLOTS * (slotSize + slotSpacing) + 24.0f;
+    float catalogHeight = catalogRows * (slotSize + slotSpacing);
+    float hotbarHeight = slotSize + slotSpacing;
+    float windowHeight = catalogHeight + hotbarHeight + 80.0f;
+
+    ImGui::SetNextWindowPos(ImVec2(fbWidth * 0.5f, fbHeight * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight));
+
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+                             ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar;
+
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.1f, 0.1f, 0.1f, 0.92f));
+    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.4f, 0.4f, 0.4f, 0.8f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 2.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+
+    ImGui::Begin("##CreativeInventory", nullptr, flags);
+
+    ImGui::Text("Creative");
+    ImGui::Spacing();
+
+    for (int i = 0; i < static_cast<int>(items.size()); i++)
+    {
+        int col = i % HOTBAR_SLOTS;
+        ImGui::PushID(10000 + i);
+
+        ImVec2 pos = ImGui::GetCursorScreenPos();
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+
+        dl->AddRectFilled(pos, ImVec2(pos.x + slotSize, pos.y + slotSize), IM_COL32(40, 40, 40, 220));
+        dl->AddRect(pos, ImVec2(pos.x + slotSize, pos.y + slotSize), IM_COL32(100, 100, 100, 150));
+
+        if (ImGui::InvisibleButton("##cslot", ImVec2(slotSize, slotSize)))
+        {
+            uint8_t count = isToolItem(items[i].id) ? 1 : 64;
+            inv.heldItem = {items[i].id, count};
+        }
+
+        if (ImGui::IsItemHovered())
+        {
+            dl->AddRectFilled(pos, ImVec2(pos.x + slotSize, pos.y + slotSize), IM_COL32(255, 255, 255, 40));
+            ImGui::SetTooltip("%s", items[i].name);
+        }
+
+        GLuint iconTex = getItemIcon(items[i].id);
+        if (iconTex != 0)
+        {
+            float pad = 4.0f;
+            dl->AddImage(
+                (ImTextureID)(intptr_t)iconTex,
+                ImVec2(pos.x + pad, pos.y + pad),
+                ImVec2(pos.x + slotSize - pad, pos.y + slotSize - pad));
+        }
+
+        ImGui::PopID();
+
+        if (col < HOTBAR_SLOTS - 1 && i < static_cast<int>(items.size()) - 1)
+            ImGui::SameLine(0.0f, slotSpacing);
+    }
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    for (int col = 0; col < HOTBAR_SLOTS; col++)
+    {
+        drawSlotWidget(inv, col, slotSize, col == inv.selectedHotbar);
+        if (col < HOTBAR_SLOTS - 1)
+            ImGui::SameLine(0.0f, slotSpacing);
+    }
+
+    ImGui::End();
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(2);
+
+    if (!inv.heldItem.isEmpty())
+    {
+        ImDrawList* dl = ImGui::GetForegroundDrawList();
+        ImVec2 mousePos = ImGui::GetMousePos();
+        float halfSlot = slotSize * 0.5f;
+
+        GLuint heldTex = getItemIcon(inv.heldItem.blockId);
+        if (heldTex != 0)
+        {
+            dl->AddImage(
+                (ImTextureID)(intptr_t)heldTex,
                 ImVec2(mousePos.x - halfSlot + 4.0f, mousePos.y - halfSlot + 4.0f),
                 ImVec2(mousePos.x + halfSlot - 4.0f, mousePos.y + halfSlot - 4.0f));
         }

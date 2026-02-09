@@ -7,38 +7,56 @@
 #pragma comment(lib, "winmm.lib")
 #endif
 
+// libs
 #include "../../libs/imgui/backends/imgui_impl_glfw.h"
 #include "../../libs/imgui/backends/imgui_impl_opengl3.h"
 #include "../../libs/imgui/imgui.h"
+
+// rendering
 #include "../rendering/opengl/ShaderClass.h"
 #include "../rendering/Camera.h"
+#include "../rendering/Meshing.h"
+#include "../rendering/ParticleSystem.h"
+#include "../rendering/ItemModelGenerator.h"
+#include "../rendering/ToolModelGenerator.h"
+
+// world
 #include "../world/Chunk.h"
 #include "../world/ChunkManager.h"
-#include "../rendering/Meshing.h"
-#include "../utils/BlockTypes.h"
-#include "../utils/CoordUtils.h"
-#include "../gameplay/Raycast.h"
-#include "../gameplay/Player.h"
-#include "../utils/JobSystem.h"
 #include "../world/RegionManager.h"
 #include "../world/WaterSimulator.h"
-#include "../rendering/ParticleSystem.h"
-#include "MainGlobals.h"
+
+// utils
+#include "../utils/BlockTypes.h"
+#include "../utils/CoordUtils.h"
+#include "../utils/JobSystem.h"
+
+// gameplay
+#include "../gameplay/Raycast.h"
+#include "../gameplay/Player.h"
 #include "../gameplay/SurvivalSystem.h"
 #include "../gameplay/Inventory.h"
+
+// core
+#include "MainGlobals.h"
 #include "GameState.h"
-#include "../rendering/ItemModelGenerator.h"
+
+// ui
 #include "../ui/MainMenu.h"
-#include <memory>
 
+// system and thirdparty
 #include "../thirdparty/stb_image.h"
-
+#include "../world/TerrainGenerator.h"
+#include <memory>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <algorithm>
 #include <array>
 #include <cstdlib>
 #include <exception>
+#include <filesystem>
+#include <fstream>
+#include <random>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -71,6 +89,7 @@ int main(int argc, char* argv[])
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
+    glfwWindowHint(GLFW_MAXIMIZED, GLFW_TRUE);
     GLFWwindow *window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT,
                                           "VoxelEngine", NULL, NULL);
     if (window == NULL)
@@ -182,6 +201,7 @@ int main(int argc, char* argv[])
     std::string hudIconPath = resolveTexturePath("assets/textures/hud_blocks");
     loadBlockIcons(hudIconPath);
     loadItemModels();
+    loadToolModels();
 
     GLuint destroyTextures[10] = {};
     for (int i = 0; i < 10; ++i)
@@ -210,6 +230,12 @@ int main(int argc, char* argv[])
     GLint itemTransformLoc = glGetUniformLocation(itemModelShader.ID, "transform");
     GLint itemTimeOfDayLoc = glGetUniformLocation(itemModelShader.ID, "timeOfDay");
     GLint itemAmbientLightLoc = glGetUniformLocation(itemModelShader.ID, "ambientLight");
+
+    Shader toolModelShader("tool_model.vert", "tool_model.frag");
+    toolModelShader.Activate();
+    GLint toolTransformLoc = glGetUniformLocation(toolModelShader.ID, "transform");
+    GLint toolTimeOfDayLoc = glGetUniformLocation(toolModelShader.ID, "timeOfDay");
+    GLint toolAmbientLightLoc = glGetUniformLocation(toolModelShader.ID, "ambientLight");
 
     Shader waterShader("water.vert", "water.frag");
     waterShader.Activate();
@@ -313,10 +339,30 @@ int main(int argc, char* argv[])
 
     std::optional<RaycastHit> selectedBlock;
 
-    auto initWorld = [&](const std::string& worldName)
+    auto initWorld = [&](const std::string& worldName, int requestedGamemode = -1)
     {
       currentWorldName = worldName;
       std::string worldPath = "saves/" + worldName;
+      std::filesystem::create_directories(worldPath);
+
+      std::string seedPath = worldPath + "/seed.dat";
+      {
+        std::ifstream seedFile(seedPath, std::ios::binary);
+        if (seedFile.is_open())
+        {
+          uint32_t savedSeed = 0;
+          seedFile.read(reinterpret_cast<char*>(&savedSeed), sizeof(savedSeed));
+          setWorldSeed(savedSeed);
+        }
+        else
+        {
+          std::random_device rd;
+          uint32_t newSeed = rd();
+          setWorldSeed(newSeed);
+          std::ofstream out(seedPath, std::ios::binary);
+          out.write(reinterpret_cast<const char*>(&newSeed), sizeof(newSeed));
+        }
+      }
 
       regionManager = std::make_unique<RegionManager>(worldPath);
       chunkManager = std::make_unique<ChunkManager>();
@@ -354,7 +400,9 @@ int main(int argc, char* argv[])
         player.pitch = 0.0f;
         player.health = 20.0f;
         player.hunger = 20.0f;
-        player.gamemode = Gamemode::Survival;
+        player.gamemode = (requestedGamemode >= 0)
+            ? static_cast<Gamemode>(requestedGamemode)
+            : Gamemode::Survival;
         player.isDead = false;
         player.noclip = false;
       }
@@ -375,6 +423,8 @@ int main(int argc, char* argv[])
             player.inventory.hotbar(i).blockId = defaultBlocks[i];
             player.inventory.hotbar(i).count = 64;
           }
+          player.inventory.hotbar(9).blockId = TOOL_DIAMOND_PICKAXE;
+          player.inventory.hotbar(9).count = 1;
         }
       }
 
@@ -432,6 +482,10 @@ int main(int argc, char* argv[])
       glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
       currentWorldName.clear();
     };
+
+    static float toolPosX = 0.46f, toolPosY = -0.23f, toolPosZ = -0.54f;
+    static float toolRotX = -76.0f, toolRotY = 148.0f, toolRotZ = -84.0f;
+    static float toolScale = 0.47f;
 
     while (!glfwWindowShouldClose(window))
     {
@@ -1012,43 +1066,87 @@ int main(int argc, char* argv[])
             const ItemStack& held = player.inventory.selectedItem();
             if (!held.isEmpty())
             {
-                auto it = g_itemModels.find(held.blockId);
-                if (it != g_itemModels.end() && it->second.indexCount > 0)
+                if (isToolItem(held.blockId))
                 {
-                    glClear(GL_DEPTH_BUFFER_BIT);
-                    if (wireframeMode)
-                        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-                    else
-                        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+                    auto it = g_toolModels.find(held.blockId);
+                    if (it != g_toolModels.end() && it->second.indexCount > 0)
+                    {
+                        glClear(GL_DEPTH_BUFFER_BIT);
+                        if (wireframeMode)
+                            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+                        else
+                            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
-                    itemModelShader.Activate();
-                    glActiveTexture(GL_TEXTURE0);
-                    glBindTexture(GL_TEXTURE_2D_ARRAY, textureArray);
-                    glUniform1f(itemTimeOfDayLoc, sunBrightness);
-                    glUniform1f(itemAmbientLightLoc, ambientLight);
+                        toolModelShader.Activate();
+                        glUniform1f(toolTimeOfDayLoc, sunBrightness);
+                        glUniform1f(toolAmbientLightLoc, ambientLight);
 
-                    glm::mat4 handProj = glm::perspective(
-                        glm::radians(70.0f), aspect, 0.01f, 10.0f);
+                        glm::mat4 handProj = glm::perspective(
+                            glm::radians(70.0f), aspect, 0.01f, 10.0f);
 
-                    glm::mat4 handModel = glm::mat4(1.0f);
-                    handModel = glm::translate(handModel,
-                        glm::vec3(0.4f, -0.36f, -0.7f));
-                    handModel = glm::rotate(handModel,
-                        glm::radians(35.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-                    handModel = glm::rotate(handModel,
-                        glm::radians(-20.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-                    handModel = glm::scale(handModel, glm::vec3(0.16f));
-                    handModel = glm::translate(handModel,
-                        glm::vec3(-0.5f, -0.5f, -0.5f));
+                        glm::mat4 handModel = glm::mat4(1.0f);
+                        handModel = glm::translate(handModel,
+                            glm::vec3(toolPosX, toolPosY, toolPosZ));
+                        handModel = glm::rotate(handModel,
+                            glm::radians(toolRotZ), glm::vec3(0.0f, 0.0f, 1.0f));
+                        handModel = glm::rotate(handModel,
+                            glm::radians(toolRotY), glm::vec3(0.0f, 1.0f, 0.0f));
+                        handModel = glm::rotate(handModel,
+                            glm::radians(toolRotX), glm::vec3(1.0f, 0.0f, 0.0f));
+                        handModel = glm::scale(handModel, glm::vec3(toolScale));
+                        handModel = glm::translate(handModel,
+                            glm::vec3(-0.5f, -0.5f, -0.03125f));
 
-                    glm::mat4 handMVP = handProj * handModel;
-                    glUniformMatrix4fv(itemTransformLoc, 1, GL_FALSE,
-                        glm::value_ptr(handMVP));
+                        glm::mat4 handMVP = handProj * handModel;
+                        glUniformMatrix4fv(toolTransformLoc, 1, GL_FALSE,
+                            glm::value_ptr(handMVP));
 
-                    glBindVertexArray(it->second.vao);
-                    glDrawElements(GL_TRIANGLES, it->second.indexCount,
-                        GL_UNSIGNED_INT, 0);
-                    glBindVertexArray(0);
+                        glBindVertexArray(it->second.vao);
+                        glDrawElements(GL_TRIANGLES, it->second.indexCount,
+                            GL_UNSIGNED_INT, 0);
+                        glBindVertexArray(0);
+                    }
+                }
+                else
+                {
+                    auto it = g_itemModels.find(held.blockId);
+                    if (it != g_itemModels.end() && it->second.indexCount > 0)
+                    {
+                        glClear(GL_DEPTH_BUFFER_BIT);
+                        if (wireframeMode)
+                            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+                        else
+                            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+                        itemModelShader.Activate();
+                        glActiveTexture(GL_TEXTURE0);
+                        glBindTexture(GL_TEXTURE_2D_ARRAY, textureArray);
+                        glUniform1f(itemTimeOfDayLoc, sunBrightness);
+                        glUniform1f(itemAmbientLightLoc, ambientLight);
+
+                        glm::mat4 handProj = glm::perspective(
+                            glm::radians(70.0f), aspect, 0.01f, 10.0f);
+
+                        glm::mat4 handModel = glm::mat4(1.0f);
+                        handModel = glm::translate(handModel,
+                            glm::vec3(0.4f, -0.36f, -0.7f));
+                        handModel = glm::rotate(handModel,
+                            glm::radians(35.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+                        handModel = glm::rotate(handModel,
+                            glm::radians(-20.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+                        handModel = glm::scale(handModel, glm::vec3(0.16f));
+                        handModel = glm::translate(handModel,
+                            glm::vec3(-0.5f, -0.5f, -0.5f));
+
+                        glm::mat4 handMVP = handProj * handModel;
+                        glUniformMatrix4fv(itemTransformLoc, 1, GL_FALSE,
+                            glm::value_ptr(handMVP));
+
+                        glBindVertexArray(it->second.vao);
+                        glDrawElements(GL_TRIANGLES, it->second.indexCount,
+                            GL_UNSIGNED_INT, 0);
+                        glBindVertexArray(0);
+                    }
                 }
             }
         }
@@ -1165,6 +1263,36 @@ int main(int argc, char* argv[])
               ImGui::EndTabItem();
             }
 
+            if (ImGui::BeginTabItem("Tool Transform"))
+            {
+              ImGui::Text("POSITION");
+              ImGui::SliderFloat("Pos X", &toolPosX, -1.0f, 1.0f, "%.3f");
+              ImGui::SliderFloat("Pos Y", &toolPosY, -1.0f, 1.0f, "%.3f");
+              ImGui::SliderFloat("Pos Z", &toolPosZ, -2.0f, 0.0f, "%.3f");
+
+              ImGui::Separator();
+              ImGui::Text("ROTATION");
+              ImGui::SliderFloat("Rot X", &toolRotX, -180.0f, 180.0f, "%.1f");
+              ImGui::SliderFloat("Rot Y", &toolRotY, -180.0f, 180.0f, "%.1f");
+              ImGui::SliderFloat("Rot Z", &toolRotZ, -180.0f, 180.0f, "%.1f");
+
+              ImGui::Separator();
+              ImGui::SliderFloat("Scale", &toolScale, 0.1f, 2.0f, "%.3f");
+
+              ImGui::Separator();
+              if (ImGui::Button("Reset"))
+              {
+                toolPosX = 0.46f; toolPosY = -0.23f; toolPosZ = -0.54f;
+                toolRotX = -76.0f; toolRotY = 148.0f; toolRotZ = -84.0f;
+                toolScale = 0.47f;
+              }
+              ImGui::SameLine();
+              ImGui::Text("  X:%.2f Y:%.2f Z:%.2f  rX:%.0f rY:%.0f rZ:%.0f  s:%.2f",
+                  toolPosX, toolPosY, toolPosZ, toolRotX, toolRotY, toolRotZ, toolScale);
+
+              ImGui::EndTabItem();
+            }
+
             ImGui::EndTabBar();
           }
 
@@ -1230,7 +1358,12 @@ int main(int argc, char* argv[])
 
           drawHotbar(player.inventory, fbWidth, fbHeight);
           if (inventoryOpen)
-            drawInventoryScreen(player.inventory, fbWidth, fbHeight);
+          {
+            if (player.gamemode == Gamemode::Creative)
+              drawCreativeInventoryScreen(player.inventory, fbWidth, fbHeight);
+            else
+              drawInventoryScreen(player.inventory, fbWidth, fbHeight);
+          }
         }
       }
       else
@@ -1259,7 +1392,7 @@ int main(int argc, char* argv[])
         auto result = drawWorldSelect(fbWidth, fbHeight);
         if (result.nextState == GameState::Playing && !result.selectedWorld.empty())
         {
-          initWorld(result.selectedWorld);
+          initWorld(result.selectedWorld, result.gamemode);
         }
         else if (result.nextState != GameState::WorldSelect)
         {
@@ -1331,6 +1464,7 @@ int main(int argc, char* argv[])
     destroyShader.Delete();
     waterShader.Delete();
     itemModelShader.Delete();
+    toolModelShader.Delete();
 
     for (GLuint tex : destroyTextures)
     {
@@ -1339,6 +1473,7 @@ int main(int argc, char* argv[])
     }
     unloadBlockIcons();
     unloadItemModels();
+    unloadToolModels();
 
     ImGui_ImplGlfw_Shutdown();
     ImGui_ImplOpenGL3_Shutdown();

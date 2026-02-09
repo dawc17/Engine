@@ -11,6 +11,7 @@
 #include "../../libs/imgui/imgui.h"
 #include "../utils/BlockTypes.h"
 #include "../rendering/Camera.h"
+#include "../rendering/ToolModelGenerator.h"
 #include "../utils/CoordUtils.h"
 #include "GameState.h"
 #include "../gameplay/Player.h"
@@ -412,7 +413,7 @@ void processInput(GLFWwindow* window, Player& player, float dt)
   if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
     inputDir += right;
 
-  if (player.noclip)
+  if (player.noclip || player.flying)
   {
     if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
       inputDir.y += 1.0f;
@@ -422,7 +423,27 @@ void processInput(GLFWwindow* window, Player& player, float dt)
 
   player.applyMovement(inputDir, cameraSpeed);
 
-  if (!player.noclip && glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
+  static bool spaceWasPressed = false;
+  static float lastSpacePressTime = 0.0f;
+  bool spaceDown = glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS;
+
+  if (spaceDown && !spaceWasPressed)
+  {
+    float now = static_cast<float>(glfwGetTime());
+    if (player.gamemode == Gamemode::Creative && !player.noclip)
+    {
+      if (now - lastSpacePressTime < 0.3f)
+      {
+        player.flying = !player.flying;
+        if (player.flying)
+          player.velocity.y = 0.0f;
+      }
+    }
+    lastSpacePressTime = now;
+  }
+  spaceWasPressed = spaceDown;
+
+  if (!player.noclip && !player.flying && spaceDown)
   {
     player.jump();
   }
@@ -526,6 +547,8 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
   {
     const ItemStack& selected = g_player->inventory.selectedItem();
     if (selected.isEmpty())
+      return;
+    if (isToolItem(selected.blockId))
       return;
 
     glm::ivec3 placePos = hit->blockPos + hit->normal;

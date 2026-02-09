@@ -22,6 +22,7 @@ set(SOURCES
     world/WaterSimulator.cpp
     rendering/ParticleSystem.cpp
     rendering/ItemModelGenerator.cpp
+    rendering/ToolModelGenerator.cpp
 )
 
 add_executable(VoxelEngine ${SOURCES})
@@ -50,6 +51,9 @@ set(SHADER_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/shaders/particle.frag
     ${CMAKE_CURRENT_SOURCE_DIR}/shaders/item_model.vert
     ${CMAKE_CURRENT_SOURCE_DIR}/shaders/item_model.frag
+    ${CMAKE_CURRENT_SOURCE_DIR}/shaders/tool_model.vert
+    ${CMAKE_CURRENT_SOURCE_DIR}/shaders/tool_model.frag
+
 )
 
 add_custom_target(copy_shaders ALL

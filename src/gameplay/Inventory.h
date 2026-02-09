@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <array>
 #include <string>
+#include <vector>
 
 constexpr int HOTBAR_SLOTS = 9;
 constexpr int INVENTORY_ROWS = 3;
@@ -44,5 +45,14 @@ struct Inventory
     void saveToFile(const std::string& path) const;
 };
 
+struct CreativeItem
+{
+    uint8_t id;
+    const char* name;
+};
+
+const std::vector<CreativeItem>& getCreativeItems();
+
 void drawHotbar(const Inventory& inv, int fbWidth, int fbHeight);
 void drawInventoryScreen(Inventory& inv, int fbWidth, int fbHeight);
+void drawCreativeInventoryScreen(Inventory& inv, int fbWidth, int fbHeight);
