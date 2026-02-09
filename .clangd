@@ -1,9 +1,10 @@
 CompileFlags:
   Add:
-    - "-I../libs/glad/include"
-    - "-I../libs/glm-1.0.2"
-    - "-I../libs/imgui"
-    - "-I../libs/imgui/backends"
-    - "-I../build/_deps/glfw-src/include"
+    - "-I../../libs/glad/include"
+    - "-I../../../libs/glad/include/glad/glad.h"
+    - "-I../../libs/glm-1.0.2"
+    - "-I../../libs/imgui"
+    - "-I../../libs/imgui/backends"
+    - "-I../../build/_deps/glfw-src/include"
     - "-std=c++17"
 

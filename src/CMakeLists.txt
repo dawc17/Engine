@@ -1,44 +1,55 @@
 set(SOURCES
-    main.cpp
-    MainMenu.cpp
-    MainGlobals.cpp
-    SurvivalSystem.cpp
-    Inventory.cpp
-    VBO.cpp
-    VAO.cpp
-    EBO.cpp
-    ShaderClass.cpp
-    Camera.cpp
-    Chunk.cpp
-    ChunkManager.cpp
-    Meshing.cpp
-    BlockTypes.cpp
-    Raycast.cpp
-    Player.cpp
-    RegionManager.cpp
-    JobSystem.cpp
-    TerrainGenerator.cpp
-    CaveGenerator.cpp
-    WaterSimulator.cpp
-    ParticleSystem.cpp
-    ItemModelGenerator.cpp
+    core/main.cpp
+    ui/MainMenu.cpp
+    core/MainGlobals.cpp
+    gameplay/SurvivalSystem.cpp
+    gameplay/Inventory.cpp
+    rendering/opengl/VBO.cpp
+    rendering/opengl/VAO.cpp
+    rendering/opengl/EBO.cpp
+    rendering/opengl/ShaderClass.cpp
+    rendering/Camera.cpp
+    world/Chunk.cpp
+    world/ChunkManager.cpp
+    rendering/Meshing.cpp
+    utils/BlockTypes.cpp
+    gameplay/Raycast.cpp
+    gameplay/Player.cpp
+    world/RegionManager.cpp
+    utils/JobSystem.cpp
+    world/TerrainGenerator.cpp
+    world/CaveGenerator.cpp
+    world/WaterSimulator.cpp
+    rendering/ParticleSystem.cpp
+    rendering/ItemModelGenerator.cpp
 )
 
 add_executable(VoxelEngine ${SOURCES})
+target_include_directories(VoxelEngine PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/gameplay
+    ${CMAKE_CURRENT_SOURCE_DIR}/rendering
+    ${CMAKE_CURRENT_SOURCE_DIR}/rendering/opengl
+    ${CMAKE_CURRENT_SOURCE_DIR}/ui
+    ${CMAKE_CURRENT_SOURCE_DIR}/utils
+    ${CMAKE_CURRENT_SOURCE_DIR}/world
+    ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty
+)
 
 set(SHADER_FILES
-    ${CMAKE_CURRENT_SOURCE_DIR}/default.vert
-    ${CMAKE_CURRENT_SOURCE_DIR}/default.frag
-    ${CMAKE_CURRENT_SOURCE_DIR}/selection.vert
-    ${CMAKE_CURRENT_SOURCE_DIR}/selection.frag
-    ${CMAKE_CURRENT_SOURCE_DIR}/destroy.vert
-    ${CMAKE_CURRENT_SOURCE_DIR}/destroy.frag
-    ${CMAKE_CURRENT_SOURCE_DIR}/water.vert
-    ${CMAKE_CURRENT_SOURCE_DIR}/water.frag
-    ${CMAKE_CURRENT_SOURCE_DIR}/particle.vert
-    ${CMAKE_CURRENT_SOURCE_DIR}/particle.frag
-    ${CMAKE_CURRENT_SOURCE_DIR}/item_model.vert
-    ${CMAKE_CURRENT_SOURCE_DIR}/item_model.frag
+    ${CMAKE_CURRENT_SOURCE_DIR}/shaders/default.vert
+    ${CMAKE_CURRENT_SOURCE_DIR}/shaders/default.frag
+    ${CMAKE_CURRENT_SOURCE_DIR}/shaders/selection.vert
+    ${CMAKE_CURRENT_SOURCE_DIR}/shaders/selection.frag
+    ${CMAKE_CURRENT_SOURCE_DIR}/shaders/destroy.vert
+    ${CMAKE_CURRENT_SOURCE_DIR}/shaders/destroy.frag
+    ${CMAKE_CURRENT_SOURCE_DIR}/shaders/water.vert
+    ${CMAKE_CURRENT_SOURCE_DIR}/shaders/water.frag
+    ${CMAKE_CURRENT_SOURCE_DIR}/shaders/particle.vert
+    ${CMAKE_CURRENT_SOURCE_DIR}/shaders/particle.frag
+    ${CMAKE_CURRENT_SOURCE_DIR}/shaders/item_model.vert
+    ${CMAKE_CURRENT_SOURCE_DIR}/shaders/item_model.frag
 )
 
 add_custom_target(copy_shaders ALL
@@ -96,7 +107,7 @@ target_include_directories(VoxelEngine PUBLIC
     ${IMGUI_DIR}/backends
 )
 
-target_compile_definitions(VoxelEngine PRIVATE SHADER_DIR=\"${CMAKE_SOURCE_DIR}/src\")
+target_compile_definitions(VoxelEngine PRIVATE SHADER_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/shaders\")
 
 # === GLFW & OpenGL ===
 if (WIN32)
