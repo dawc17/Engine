@@ -18,6 +18,7 @@ set(SOURCES
     world/RegionManager.cpp
     utils/JobSystem.cpp
     world/TerrainGenerator.cpp
+    world/Biome.cpp
     world/CaveGenerator.cpp
     world/WaterSimulator.cpp
     rendering/ParticleSystem.cpp

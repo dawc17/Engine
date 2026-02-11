@@ -2,6 +2,7 @@
 #include "../core/MainGlobals.h"
 #include "../utils/BlockTypes.h"
 #include "../gameplay/Inventory.h"
+#include "../world/TerrainGenerator.h"
 #include "../../libs/imgui/imgui.h"
 #include <cmath>
 
@@ -39,6 +40,20 @@ void drawDebugUI(
             int chunkXDbg = static_cast<int>(floor(player.position.x / 16.0f));
             int chunkZDbg = static_cast<int>(floor(player.position.z / 16.0f));
             ImGui::Text("Chunk: (%d, %d)", chunkXDbg, chunkZDbg);
+
+            int playerBlockX = static_cast<int>(std::floor(player.position.x));
+            int playerBlockZ = static_cast<int>(std::floor(player.position.z));
+            BiomeID biome = getBiomeAt(playerBlockX, playerBlockZ);
+            const char* biomeName = "Unknown";
+            switch (biome)
+            {
+                case BiomeID::Desert: biomeName = "Desert"; break;
+                case BiomeID::Forest: biomeName = "Forest"; break;
+                case BiomeID::Tundra: biomeName = "Tundra"; break;
+                case BiomeID::Plains: biomeName = "Plains"; break;
+                default: break;
+            }
+            ImGui::Text("Biome: %s", biomeName);
 
             if (selectedBlock.has_value())
             {

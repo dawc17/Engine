@@ -1,4 +1,5 @@
 #include "TerrainGenerator.h"
+#include "Biome.h"
 #include "../thirdparty/PerlinNoise.hpp"
 #include <cmath>
 #include <cstdint>
@@ -6,7 +7,8 @@
 static siv::PerlinNoise::seed_type TERRAIN_SEED = 6767420;
 static siv::PerlinNoise perlin{TERRAIN_SEED};
 static siv::PerlinNoise perlinDetail{TERRAIN_SEED + 1};
-static siv::PerlinNoise perlinTrees{TERRAIN_SEED + 2};
+static siv::PerlinNoise perlinBiomeTemp{TERRAIN_SEED + 3};
+static siv::PerlinNoise perlinBiomeHumidity{TERRAIN_SEED + 4};
 
 constexpr int BASE_HEIGHT = 100;
 constexpr int HEIGHT_VARIATION = 40;
@@ -29,19 +31,27 @@ constexpr int TREE_GRID_SIZE = 7;
 constexpr int TREE_OFFSET_RANGE = 10;
 constexpr float TREE_SPAWN_CHANCE = 0.2f;
 
-static bool shouldPlaceTree(int worldX, int worldZ)
+static bool shouldPlaceTree(int worldX, int worldZ, float chance)
 {
+    if (chance <= 0.0f)
+        return false;
+
+    if (chance > 1.0f)
+        chance = 1.0f;
+
     int cellX = worldX >= 0 ? worldX / TREE_GRID_SIZE : (worldX - TREE_GRID_SIZE + 1) / TREE_GRID_SIZE;
     int cellZ = worldZ >= 0 ? worldZ / TREE_GRID_SIZE : (worldZ - TREE_GRID_SIZE + 1) / TREE_GRID_SIZE;
 
+    unsigned int seedHash = static_cast<unsigned int>(TERRAIN_SEED) * 83492791u;
     unsigned int cellHash = static_cast<unsigned int>(cellX * 73856093) ^
-                            static_cast<unsigned int>(cellZ * 19349663);
+                            static_cast<unsigned int>(cellZ * 19349663) ^
+                            seedHash;
 
     float spawnChance = (cellHash % 10000) / 10000.0f;
-    if (spawnChance >= TREE_SPAWN_CHANCE)
+    if (spawnChance >= chance)
         return false;
 
-    unsigned int offsetHash = cellHash * 31337;
+    unsigned int offsetHash = cellHash * 31337u;
     int offsetX = static_cast<int>(offsetHash % TREE_OFFSET_RANGE);
     int offsetZ = static_cast<int>((offsetHash / TREE_OFFSET_RANGE) % TREE_OFFSET_RANGE);
 
@@ -51,7 +61,29 @@ static bool shouldPlaceTree(int worldX, int worldZ)
     return worldX == treePosX && worldZ == treePosZ;
 }
 
-static double getTerrainHeight(float worldX, float worldZ)
+static BiomeID sampleBiome(float worldX, float worldZ)
+{
+    double temperature = perlinBiomeTemp.octave2D_01(
+        worldX * 0.0015,
+        worldZ * 0.0015,
+        3,
+        0.5
+    );
+
+    double humidity = perlinBiomeHumidity.octave2D_01(
+        worldX * 0.0015,
+        worldZ * 0.0015,
+        3,
+        0.5
+    );
+
+    return pickBiomeFromClimate(
+        static_cast<float>(temperature),
+        static_cast<float>(humidity)
+    );
+}
+
+static double getTerrainHeight(float worldX, float worldZ, const BiomeDefinition& biome)
 {
     double continentNoise = perlin.octave2D_01(
         worldX * 0.002,
@@ -79,7 +111,7 @@ static double getTerrainHeight(float worldX, float worldZ)
     double blendedNoise = continentNoise * 0.4 + hillNoise * 0.5 + detailNoise * 0.1;
     blendedNoise = blendedNoise * blendedNoise * (3.0 - 2.0 * blendedNoise);
 
-    return BASE_HEIGHT + blendedNoise * HEIGHT_VARIATION;
+    return BASE_HEIGHT + blendedNoise * (HEIGHT_VARIATION * biome.terrainAmplitude);
 }
 
 static void setBlockIfInChunk(BlockID* blocks, int localX, int localY, int localZ, uint8_t blockId, bool overwriteSolid = false)
@@ -109,7 +141,9 @@ void generateTerrain(BlockID* blocks, int cx, int cy, int cz)
             float worldX = static_cast<float>(worldOffsetX + x);
             float worldZ = static_cast<float>(worldOffsetZ + z);
 
-            int terrainHeight = static_cast<int>(std::round(getTerrainHeight(worldX, worldZ)));
+            BiomeID biomeId = sampleBiome(worldX, worldZ);
+            const BiomeDefinition& biome = getBiomeDefinition(biomeId);
+            int terrainHeight = static_cast<int>(std::round(getTerrainHeight(worldX, worldZ, biome)));
 
             for (int y = 0; y < CHUNK_SIZE; y++)
             {
@@ -129,17 +163,13 @@ void generateTerrain(BlockID* blocks, int cx, int cy, int cz)
                 }
                 else if (worldY == terrainHeight)
                 {
-                    if (terrainHeight <= SEA_LEVEL + 2 && terrainHeight >= SEA_LEVEL - 3)
+                    if (terrainHeight <= SEA_LEVEL + 2)
                     {
                         blocks[i] = BLOCK_SAND;
-                    }
-                    else if (terrainHeight > SEA_LEVEL)
-                    {
-                        blocks[i] = BLOCK_GRASS;
                     }
                     else
                     {
-                        blocks[i] = BLOCK_SAND;
+                        blocks[i] = biome.surfaceBlock;
                     }
                 }
                 else if (worldY > terrainHeight - DIRT_DEPTH)
@@ -150,7 +180,7 @@ void generateTerrain(BlockID* blocks, int cx, int cy, int cz)
                     }
                     else
                     {
-                        blocks[i] = BLOCK_DIRT;
+                        blocks[i] = biome.fillerBlock;
                     }
                 }
                 else
@@ -168,18 +198,29 @@ void generateTerrain(BlockID* blocks, int cx, int cy, int cz)
             int worldX = worldOffsetX + x;
             int worldZ = worldOffsetZ + z;
 
-            if (!shouldPlaceTree(worldX, worldZ))
+            BiomeID biomeId = sampleBiome(static_cast<float>(worldX), static_cast<float>(worldZ));
+            const BiomeDefinition& biome = getBiomeDefinition(biomeId);
+
+            if (biome.treeType == TreeType::None)
+                continue;
+
+            if (!shouldPlaceTree(worldX, worldZ, TREE_SPAWN_CHANCE * biome.treeDensity))
                 continue;
 
             int terrainHeight = static_cast<int>(std::round(getTerrainHeight(
-                static_cast<float>(worldX), static_cast<float>(worldZ))));
+                static_cast<float>(worldX), static_cast<float>(worldZ), biome)));
 
             if (terrainHeight <= SEA_LEVEL + 2)
                 continue;
 
             int treeBaseY = terrainHeight + 1;
+            int trunkHeight = TREE_TRUNK_HEIGHT;
+            if (biome.treeType == TreeType::Spruce)
+            {
+                trunkHeight = TREE_TRUNK_HEIGHT + 1;
+            }
 
-            for (int ty = 0; ty < TREE_TRUNK_HEIGHT; ty++)
+            for (int ty = 0; ty < trunkHeight; ty++)
             {
                 int localX = x;
                 int localY = treeBaseY + ty - worldOffsetY;
@@ -187,7 +228,7 @@ void generateTerrain(BlockID* blocks, int cx, int cy, int cz)
                 setBlockIfInChunk(blocks, localX, localY, localZ, BLOCK_LOG, true);
             }
 
-            int leafCenterY = treeBaseY + TREE_TRUNK_HEIGHT - 1;
+            int leafCenterY = treeBaseY + trunkHeight - 1;
             for (int lx = -TREE_LEAF_RADIUS; lx <= TREE_LEAF_RADIUS; lx++)
             {
                 for (int ly = -1; ly <= TREE_LEAF_RADIUS; ly++)
@@ -212,10 +253,18 @@ void generateTerrain(BlockID* blocks, int cx, int cy, int cz)
     }
 }
 
+BiomeID getBiomeAt(int worldX, int worldZ)
+{
+    return sampleBiome(static_cast<float>(worldX), static_cast<float>(worldZ));
+}
+
 int getTerrainHeightAt(int worldX, int worldZ)
 {
+    BiomeID biomeId = sampleBiome(static_cast<float>(worldX), static_cast<float>(worldZ));
+    const BiomeDefinition& biome = getBiomeDefinition(biomeId);
+
     return static_cast<int>(std::round(getTerrainHeight(
-        static_cast<float>(worldX), static_cast<float>(worldZ))));
+        static_cast<float>(worldX), static_cast<float>(worldZ), biome)));
 }
 
 void getTerrainHeightsForChunk(int cx, int cz, int* outHeights)
@@ -242,5 +291,6 @@ void setWorldSeed(uint32_t seed)
     TERRAIN_SEED = seed;
     perlin.reseed(TERRAIN_SEED);
     perlinDetail.reseed(TERRAIN_SEED + 1);
-    perlinTrees.reseed(TERRAIN_SEED + 2);
+    perlinBiomeTemp.reseed(TERRAIN_SEED + 3);
+    perlinBiomeHumidity.reseed(TERRAIN_SEED + 4);
 }
