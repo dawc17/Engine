@@ -20,6 +20,7 @@ struct Chunk
 
   bool dirtyMesh = true;
   bool dirtyLight = true;
+  bool dirtyData = false;
   GLuint vao = 0, vbo = 0, ebo = 0;
   uint32_t indexCount = 0;
   uint32_t vertexCount = 0;

@@ -14,6 +14,8 @@
 #include "../rendering/ParticleSystem.h"
 #include "GameState.h"
 
+class Shader;
+
 extern const int SCREEN_WIDTH;
 extern const int SCREEN_HEIGHT;
 extern const float MAX_RAYCAST_DISTANCE;
@@ -35,6 +37,7 @@ extern std::string currentWorldName;
 extern float fov;
 extern float mouseSensitivity;
 extern bool wireframeMode;
+extern bool showBiomeDebugColors;
 
 extern bool drunkMode;
 extern float drunkIntensity;
@@ -64,6 +67,12 @@ extern bool enableWaterSimulation;
 extern int waterTickRate;
 extern float waterTickAccumulator;
 extern const float WATER_TICK_INTERVAL;
+extern int frustumSolidTested;
+extern int frustumSolidCulled;
+extern int frustumSolidDrawn;
+extern int frustumWaterTested;
+extern int frustumWaterCulled;
+extern int frustumWaterDrawn;
 
 extern Player* g_player;
 extern ChunkManager* g_chunkManager;
@@ -79,6 +88,6 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
 void scrollCallback(GLFWwindow* window, double xoffset, double yoffset);
 std::string resolveTexturePath(const std::string& relativePath);
 GLuint loadHUDIcon(const std::string& path, bool useNearest = false);
-void loadBlockIcons(const std::string& basePath);
+void generateBlockIcons(GLuint textureArray, Shader* itemModelShader);
 void unloadBlockIcons();
 void executeCommand(const std::string& input, Player& player);

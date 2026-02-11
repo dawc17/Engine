@@ -126,7 +126,16 @@ void RegionFile::saveColumn(int localX, int localZ, const ColumnData& data)
         totalSize += 1 + 4 + static_cast<uint32_t>(section.compressedBlocks.size());
     }
 
-    uint32_t offset = allocateSectors(totalSize);
+    int idx = getEntryIndex(localX, localZ);
+    uint32_t offset = 0;
+    if (header[idx].offset != 0 && header[idx].size >= totalSize)
+    {
+        offset = header[idx].offset;
+    }
+    else
+    {
+        offset = allocateSectors(totalSize);
+    }
 
     file.seekp(offset, std::ios::beg);
 
@@ -143,7 +152,6 @@ void RegionFile::saveColumn(int localX, int localZ, const ColumnData& data)
         file.write(reinterpret_cast<const char*>(section.compressedBlocks.data()), compressedSize);
     }
 
-    int idx = getEntryIndex(localX, localZ);
     header[idx].offset = offset;
     header[idx].size = totalSize;
     headerDirty = true;
@@ -359,12 +367,19 @@ void RegionManager::saveChunkData(int cx, int cy, int cz, const BlockID* blocks)
     ColumnData columnData;
     region->loadColumn(localX, localZ, columnData);
 
+    std::vector<uint8_t> compressedBlocks;
+    compressBlocks(blocks, compressedBlocks);
+    if (compressedBlocks.empty())
+        return;
+
     bool found = false;
     for (auto& section : columnData.sections)
     {
         if (section.y == static_cast<int8_t>(cy))
         {
-            compressBlocks(blocks, section.compressedBlocks);
+            if (section.compressedBlocks == compressedBlocks)
+                return;
+            section.compressedBlocks = std::move(compressedBlocks);
             found = true;
             break;
         }
@@ -374,7 +389,7 @@ void RegionManager::saveChunkData(int cx, int cy, int cz, const BlockID* blocks)
     {
         SectionData newSection;
         newSection.y = static_cast<int8_t>(cy);
-        compressBlocks(blocks, newSection.compressedBlocks);
+        newSection.compressedBlocks = std::move(compressedBlocks);
         columnData.sections.push_back(std::move(newSection));
 
         std::sort(columnData.sections.begin(), columnData.sections.end(),

@@ -21,8 +21,9 @@ void main()
     float skyLightContribution = SkyLight * sunBrightness;
     float totalLight = max(skyLightContribution, ambientLight);
 
+    float tintMask = step(0.998, texColor.a);
+    vec3 tint = mix(vec3(1.0), ParticleColor.rgb, tintMask);
+
     float fade = smoothstep(0.0, 0.3, Lifetime);
-    vec4 litColor = vec4(texColor.rgb * totalLight, texColor.a);
-    FragColor = litColor * ParticleColor;
-    FragColor.a *= fade;
+    FragColor = vec4(texColor.rgb * tint * totalLight, fade);
 }

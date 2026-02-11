@@ -2,6 +2,7 @@
 #include "../core/MainGlobals.h"
 #include "../utils/BlockTypes.h"
 #include "../gameplay/Inventory.h"
+#include "../world/TerrainGenerator.h"
 #include "../../libs/imgui/imgui.h"
 #include <cmath>
 
@@ -39,6 +40,20 @@ void drawDebugUI(
             int chunkXDbg = static_cast<int>(floor(player.position.x / 16.0f));
             int chunkZDbg = static_cast<int>(floor(player.position.z / 16.0f));
             ImGui::Text("Chunk: (%d, %d)", chunkXDbg, chunkZDbg);
+
+            int playerBlockX = static_cast<int>(std::floor(player.position.x));
+            int playerBlockZ = static_cast<int>(std::floor(player.position.z));
+            BiomeID biome = getBiomeAt(playerBlockX, playerBlockZ);
+            const char* biomeName = "Unknown";
+            switch (biome)
+            {
+                case BiomeID::Desert: biomeName = "Desert"; break;
+                case BiomeID::Forest: biomeName = "Forest"; break;
+                case BiomeID::Tundra: biomeName = "Tundra"; break;
+                case BiomeID::Plains: biomeName = "Plains"; break;
+                default: break;
+            }
+            ImGui::Text("Biome: %s", biomeName);
 
             if (selectedBlock.has_value())
             {
@@ -83,6 +98,8 @@ void drawDebugUI(
             ImGui::Text("Chunks loading: %zu", chunkManager->loadingChunks.size());
             ImGui::Text("Chunks meshing: %zu", chunkManager->meshingChunks.size());
             ImGui::Text("Jobs pending: %zu", jobSystem->pendingJobCount());
+            ImGui::Text("Frustum solid  tested:%d  culled:%d  drawn:%d", frustumSolidTested, frustumSolidCulled, frustumSolidDrawn);
+            ImGui::Text("Frustum water  tested:%d  culled:%d  drawn:%d", frustumWaterTested, frustumWaterCulled, frustumWaterDrawn);
 
             ImGui::EndTabItem();
         }
@@ -93,6 +110,7 @@ void drawDebugUI(
 
             ImGui::Separator();
             ImGui::Checkbox("Wireframe mode", &wireframeMode);
+            ImGui::Checkbox("Biome Debug Colors", &showBiomeDebugColors);
             ImGui::Checkbox("Noclip mode", &player.noclip);
             ImGui::Checkbox("Async Loading", &useAsyncLoading);
             ImGui::SliderFloat("Move Speed", &cameraSpeed, 0.0f, 60.0f);
@@ -164,20 +182,6 @@ void drawDebugUI(
     ImGui::End();
 
     ImGui::Begin("Fun Bullshit", nullptr, debugFlags);
-
-    if (ImGui::Button("Randomize Block Textures"))
-    {
-        randomizeBlockTextures();
-        for (auto& pair : chunkManager->chunks)
-            pair.second->dirtyMesh = true;
-    }
-
-    if (ImGui::Button("Reset Block Textures"))
-    {
-        resetBlockTextures();
-        for (auto& pair : chunkManager->chunks)
-            pair.second->dirtyMesh = true;
-    }
 
     ImGui::Separator();
     ImGui::Text("VISUAL CHAOS");

@@ -7,16 +7,20 @@
 #include <thread>
 
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 #include "../../libs/imgui/imgui.h"
 #include "../utils/BlockTypes.h"
 #include "../rendering/Camera.h"
+#include "../rendering/ItemModelGenerator.h"
 #include "../rendering/ToolModelGenerator.h"
 #include "../utils/CoordUtils.h"
 #include "GameState.h"
 #include "../gameplay/Player.h"
 #include "../gameplay/Raycast.h"
 #include "../rendering/opengl/ShaderClass.h"
+#include "../world/Biome.h"
 #include "../world/TerrainGenerator.h"
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -47,6 +51,7 @@ std::string currentWorldName;
 float fov = 70.0f;
 float mouseSensitivity = 0.1f;
 bool wireframeMode = false;
+bool showBiomeDebugColors = false;
 
 bool drunkMode = false;
 float drunkIntensity = 1.0f;
@@ -74,6 +79,12 @@ bool enableWaterSimulation = true;
 int waterTickRate = 5;
 float waterTickAccumulator = 0.0f;
 const float WATER_TICK_INTERVAL = 0.05f;
+int frustumSolidTested = 0;
+int frustumSolidCulled = 0;
+int frustumSolidDrawn = 0;
+int frustumWaterTested = 0;
+int frustumWaterCulled = 0;
+int frustumWaterDrawn = 0;
 
 Player* g_player = nullptr;
 ChunkManager* g_chunkManager = nullptr;
@@ -134,29 +145,70 @@ GLuint loadHUDIcon(const std::string& path, bool useNearest)
   return texture;
 }
 
-void loadBlockIcons(const std::string& basePath)
+void generateBlockIcons(GLuint textureArray, Shader* itemModelShader)
 {
-  std::unordered_map<uint8_t, std::string> iconFiles = {
-      {1, "natural_dirt.png"},
-      {2, "natural_grass_block.png"},
-      {3, "masonry_cobblestone.png"},
-      {4, "natural_sand.png"},
-      {5, "log_oak.png"},
-      {6, "leaves_oak.png"},
-      {7, "transparent_glass.png"},
-      {8, "planks_oak.png"}
-  };
+  constexpr int ICON_SIZE = 128;
 
-  for (const auto& [blockId, filename] : iconFiles)
+  GLuint fbo, rbo;
+  glGenFramebuffers(1, &fbo);
+  glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+
+  glGenRenderbuffers(1, &rbo);
+  glBindRenderbuffer(GL_RENDERBUFFER, rbo);
+  glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, ICON_SIZE, ICON_SIZE);
+  glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rbo);
+
+  GLint prevViewport[4];
+  glGetIntegerv(GL_VIEWPORT, prevViewport);
+  glViewport(0, 0, ICON_SIZE, ICON_SIZE);
+
+  glm::vec3 center(0.5f, 0.5f, 0.5f);
+  glm::mat4 proj = glm::ortho(-0.85f, 0.85f, 0.85f, -0.85f, 0.1f, 10.0f);
+  glm::vec3 eye = center + glm::normalize(glm::vec3(1.0f, 0.8f, 1.0f)) * 2.5f;
+  glm::mat4 view = glm::lookAt(eye, center, glm::vec3(0.0f, 1.0f, 0.0f));
+  glm::mat4 mvp = proj * view;
+
+  itemModelShader->Activate();
+  glUniform1f(glGetUniformLocation(itemModelShader->ID, "timeOfDay"), 1.0f);
+  glUniform1f(glGetUniformLocation(itemModelShader->ID, "ambientLight"), 1.0f);
+  glUniformMatrix4fv(glGetUniformLocation(itemModelShader->ID, "transform"),
+                     1, GL_FALSE, glm::value_ptr(mvp));
+  glUniform1i(glGetUniformLocation(itemModelShader->ID, "textureArray"), 0);
+
+  glEnable(GL_DEPTH_TEST);
+
+  for (auto& [blockId, model] : g_itemModels)
   {
-    std::string fullPath = basePath + "/" + filename;
-    GLuint tex = loadHUDIcon(fullPath);
-    if (tex != 0)
-    {
-      g_blockIcons[blockId] = tex;
-      std::cout << "Loaded HUD icon for block " << (int)blockId << ": " << filename << std::endl;
-    }
+    GLuint iconTex;
+    glGenTextures(1, &iconTex);
+    glBindTexture(GL_TEXTURE_2D, iconTex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, ICON_SIZE, ICON_SIZE, 0,
+                 GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                           GL_TEXTURE_2D, iconTex, 0);
+
+    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D_ARRAY, textureArray);
+
+    glBindVertexArray(model.vao);
+    glDrawElements(GL_TRIANGLES, model.indexCount, GL_UNSIGNED_INT, 0);
+    glBindVertexArray(0);
+
+    g_blockIcons[blockId] = iconTex;
   }
+
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  glDeleteFramebuffers(1, &fbo);
+  glDeleteRenderbuffers(1, &rbo);
+  glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
 }
 
 void unloadBlockIcons()
@@ -532,7 +584,15 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
             skyLight = static_cast<float>(c->skyLight[blockIndex(local.x, local.y, local.z)]) / static_cast<float>(MAX_SKY_LIGHT);
           }
         }
-        g_particleSystem->spawnBlockBreakParticles(blockCenter, tileIndex, skyLight, 15);
+        glm::vec4 particleTint(1.0f);
+        if (g_blockTypes[oldBlock].faceTint[0])
+        {
+          BiomeID biome = getBiomeAt(hit->blockPos.x, hit->blockPos.z);
+          bool isLeaf = g_blockTypes[oldBlock].transparent && g_blockTypes[oldBlock].solid;
+          glm::vec3 t = isLeaf ? getBiomeFoliageTint(biome) : getBiomeGrassTint(biome);
+          particleTint = glm::vec4(t, 1.0f);
+        }
+        g_particleSystem->spawnBlockBreakParticles(blockCenter, tileIndex, skyLight, 15, particleTint);
       }
 
       return;

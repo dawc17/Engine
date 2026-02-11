@@ -307,7 +307,8 @@ void JobSystem::processMeshJob(MeshChunkJob* job)
         return MAX_SKY_LIGHT;
     };
 
-    buildChunkMeshOffThread(job->blocks, job->skyLight, getBlock, getSkyLight, 
+    glm::ivec3 chunkWorldOrigin(job->cx * CHUNK_SIZE, job->cy * CHUNK_SIZE, job->cz * CHUNK_SIZE);
+    buildChunkMeshOffThread(job->blocks, job->skyLight, chunkWorldOrigin, getBlock, getSkyLight, 
                              job->vertices, job->indices,
                              job->waterVertices, job->waterIndices);
 }

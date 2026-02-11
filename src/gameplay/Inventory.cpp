@@ -20,6 +20,11 @@ const std::vector<CreativeItem>& getCreativeItems()
         {6, "Oak Leaves"},
         {7, "Glass"},
         {8, "Oak Planks"},
+        {18, "Snow Grass"},
+        {19, "Spruce Log"},
+        {20, "Spruce Planks"},
+        {21, "Spruce Leaves"},
+        {22, "Cobblestone"},
         {TOOL_DIAMOND_PICKAXE, "Diamond Pickaxe"},
     };
     return items;

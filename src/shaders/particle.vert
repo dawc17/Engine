@@ -25,7 +25,7 @@ void main()
         + cameraUp * aQuadPos.y * aSize;
 
     gl_Position = projection * view * vec4(vertexPos, 1.0);
-    TexCoord = aQuadPos + 0.5;
+    TexCoord = vec2(aQuadPos.x + 0.5, 0.5 - aQuadPos.y);
     TileIndex = aTileIndex;
     ParticleColor = aColor;
     Lifetime = aLife;

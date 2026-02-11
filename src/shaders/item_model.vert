@@ -3,10 +3,12 @@ layout (location = 0) in vec3 aPos;
 layout (location = 1) in vec2 aUV;
 layout (location = 2) in float aTileIndex;
 layout (location = 3) in float aFaceShade;
+layout (location = 4) in vec3 aBiomeTint;
 
 out vec2 UV;
 flat out float TileIndex;
 out float FaceShade;
+out vec3 BiomeTint;
 
 uniform mat4 transform;
 
@@ -16,4 +18,5 @@ void main()
     UV = aUV;
     TileIndex = aTileIndex;
     FaceShade = aFaceShade;
+    BiomeTint = aBiomeTint;
 }

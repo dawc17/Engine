@@ -1,5 +1,6 @@
 #include "ItemModelGenerator.h"
 #include "../utils/BlockTypes.h"
+#include "../world/Biome.h"
 #include "Meshing.h"
 #include <iostream>
 #include <cstddef>
@@ -35,6 +36,15 @@ ItemModel ItemModelGenerator::generateBlockCube(uint8_t blockId)
         float tileIndex = static_cast<float>(block.faceTexture[dir]);
         int rotation = block.faceRotation[dir];
         float faceShade = FACE_SHADE[dir];
+
+        glm::vec3 tint(1.0f);
+        if (block.faceTint[dir])
+        {
+            bool isLeaf = block.transparent && block.solid;
+            tint = isLeaf
+                ? getBiomeFoliageTint(BiomeID::Plains)
+                : getBiomeGrassTint(BiomeID::Plains);
+        }
 
         uint32_t base = static_cast<uint32_t>(vertices.size());
 
@@ -74,7 +84,7 @@ ItemModel ItemModelGenerator::generateBlockCube(uint8_t blockId)
                     break;
             }
 
-            vertices.push_back({pos, {localU, localV}, tileIndex, faceShade});
+            vertices.push_back({pos, {localU, localV}, tileIndex, faceShade, tint});
         }
 
         indices.push_back(base);
@@ -119,6 +129,10 @@ ItemModel ItemModelGenerator::generateBlockCube(uint8_t blockId)
                           (void*)offsetof(ItemVertex, faceShade));
     glEnableVertexAttribArray(3);
 
+    glVertexAttribPointer(4, 3, GL_FLOAT, GL_FALSE, sizeof(ItemVertex),
+                          (void*)offsetof(ItemVertex, biomeTint));
+    glEnableVertexAttribArray(4);
+
     glBindVertexArray(0);
 
     model.indexCount = static_cast<uint32_t>(indices.size());
@@ -135,7 +149,7 @@ void ItemModelGenerator::destroyModel(ItemModel& model)
 
 void loadItemModels()
 {
-    uint8_t blockIds[] = {1, 2, 3, 4, 5, 6, 7, 8};
+    uint8_t blockIds[] = {1, 2, 3, 4, 5, 6, 7, 8, 18, 19, 20, 21, 22};
     for (uint8_t blockId : blockIds)
     {
         ItemModel model = ItemModelGenerator::generateBlockCube(blockId);

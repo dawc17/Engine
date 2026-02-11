@@ -6,14 +6,14 @@
 #include "../rendering/Meshing.h"
 #include "../rendering/ItemModelGenerator.h"
 #include "../rendering/ToolModelGenerator.h"
+#include "../rendering/Frustum.h"
 #include "../thirdparty/stb_image.h"
 #include "../world/Chunk.h"
+#include "glm/ext/matrix_transform.hpp"
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <iostream>
-#include <vector>
 #include <array>
-#include <algorithm>
 
 void Renderer::init()
 {
@@ -44,64 +44,131 @@ void Renderer::init()
     glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &maxAnisotropy);
     glTexParameterf(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAX_ANISOTROPY, maxAnisotropy);
 
-    int width = 0, height = 0, nrChannels = 0;
-    std::string texturePath = resolveTexturePath("assets/textures/blocks.png");
-    unsigned char* data = stbi_load(texturePath.c_str(), &width, &height, &nrChannels, 0);
+    constexpr int TILE_SIZE = 16;
+    constexpr int NUM_LAYERS = TEX_COUNT;
 
-    const int TILE_SIZE = 16;
-    const int TILES_X   = 32;
-    const int TILES_Y   = 32;
-    const int NUM_TILES  = TILES_X * TILES_Y;
+    glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_RGBA8,
+                 TILE_SIZE, TILE_SIZE, NUM_LAYERS, 0,
+                 GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
 
-    if (data)
+    struct TexEntry { int layer; const char* filename; };
+    TexEntry entries[] = {
+        { TEX_DIRT,             "dirt.png" },
+        { TEX_GRASS_TOP,        "grass_top.png" },
+        { TEX_GRASS_SIDE_SNOWED,"grass_side_snowed.png" },
+        { TEX_STONE,            "stone.png" },
+        { TEX_SAND,             "sand.png" },
+        { TEX_LOG_OAK,          "log_oak.png" },
+        { TEX_LOG_OAK_TOP,      "log_oak_top.png" },
+        { TEX_LEAVES_OAK,       "leaves_oak.png" },
+        { TEX_GLASS,            "glass.png" },
+        { TEX_PLANKS_OAK,       "planks_oak.png" },
+        { TEX_COBBLESTONE,      "cobblestone.png" },
+        { TEX_LOG_SPRUCE,       "log_spruce.png" },
+        { TEX_LOG_SPRUCE_TOP,   "log_spruce_top.png" },
+        { TEX_LEAVES_SPRUCE,    "leaves_spruce.png" },
+        { TEX_PLANKS_SPRUCE,    "planks_spruce.png" },
+        { TEX_SNOW,             "snow.png" },
+    };
+
+    for (const auto& e : entries)
     {
-        GLenum internalFormat = (nrChannels == 4) ? GL_RGBA8 : GL_RGB8;
-        GLenum format = (nrChannels == 4) ? GL_RGBA : GL_RGB;
-
-        glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, internalFormat,
-                     TILE_SIZE, TILE_SIZE, NUM_TILES, 0,
-                     format, GL_UNSIGNED_BYTE, nullptr);
-
-        std::vector<unsigned char> tileData(TILE_SIZE * TILE_SIZE * nrChannels);
-        int tileSizeBytes = TILE_SIZE * nrChannels;
-        int atlasRowBytes = width * nrChannels;
-
-        for (int ty = 0; ty < TILES_Y; ty++)
+        std::string path = resolveTexturePath(std::string("assets/textures/") + e.filename);
+        int w = 0, h = 0, ch = 0;
+        unsigned char* pixels = stbi_load(path.c_str(), &w, &h, &ch, 4);
+        if (pixels)
         {
-            for (int tx = 0; tx < TILES_X; tx++)
+            glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0,
+                            0, 0, e.layer,
+                            TILE_SIZE, TILE_SIZE, 1,
+                            GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+            stbi_image_free(pixels);
+        }
+        else
+        {
+            std::cerr << "Failed to load texture: " << path << std::endl;
+            unsigned char fallback[TILE_SIZE * TILE_SIZE * 4];
+            for (int p = 0; p < TILE_SIZE * TILE_SIZE; p++)
             {
-                int tileIndex = ty * TILES_X + tx;
-                unsigned char* tileStart = data + (ty * TILE_SIZE) * atlasRowBytes + tx * tileSizeBytes;
-                for (int row = 0; row < TILE_SIZE; row++)
+                fallback[p * 4 + 0] = 255;
+                fallback[p * 4 + 1] = 0;
+                fallback[p * 4 + 2] = 255;
+                fallback[p * 4 + 3] = 255;
+            }
+            glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0,
+                            0, 0, e.layer,
+                            TILE_SIZE, TILE_SIZE, 1,
+                            GL_RGBA, GL_UNSIGNED_BYTE, fallback);
+        }
+    }
+
+    {
+        std::string dirtPath = resolveTexturePath("assets/textures/dirt.png");
+        std::string overlayPath = resolveTexturePath("assets/textures/grass_side_overlay.png");
+        int dw = 0, dh = 0, dch = 0, ow = 0, oh = 0, och = 0;
+        unsigned char* dirtPx = stbi_load(dirtPath.c_str(), &dw, &dh, &dch, 4);
+        unsigned char* overlayPx = stbi_load(overlayPath.c_str(), &ow, &oh, &och, 4);
+
+        unsigned char composite[TILE_SIZE * TILE_SIZE * 4];
+        if (dirtPx && overlayPx)
+        {
+            for (int p = 0; p < TILE_SIZE * TILE_SIZE; p++)
+            {
+                unsigned char oa = overlayPx[p * 4 + 3];
+                if (oa > 0)
                 {
-                    std::copy(tileStart + row * atlasRowBytes,
-                              tileStart + row * atlasRowBytes + tileSizeBytes,
-                              tileData.begin() + row * tileSizeBytes);
+                    float a = static_cast<float>(oa) / 255.0f;
+                    for (int c = 0; c < 3; c++)
+                    {
+                        float bg = static_cast<float>(dirtPx[p * 4 + c]) / 255.0f;
+                        float fg = static_cast<float>(overlayPx[p * 4 + c]) / 255.0f;
+                        composite[p * 4 + c] = static_cast<unsigned char>(
+                            (fg * a + bg * (1.0f - a)) * 255.0f);
+                    }
+                    composite[p * 4 + 3] = 255;
                 }
-                glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0,
-                                0, 0, tileIndex,
-                                TILE_SIZE, TILE_SIZE, 1,
-                                format, GL_UNSIGNED_BYTE, tileData.data());
+                else
+                {
+                    composite[p * 4 + 0] = dirtPx[p * 4 + 0];
+                    composite[p * 4 + 1] = dirtPx[p * 4 + 1];
+                    composite[p * 4 + 2] = dirtPx[p * 4 + 2];
+                    composite[p * 4 + 3] = 254;
+                }
             }
         }
-        glGenerateMipmap(GL_TEXTURE_2D_ARRAY);
-        std::cout << "Loaded texture array with " << NUM_TILES << " tiles" << std::endl;
+        else
+        {
+            for (int p = 0; p < TILE_SIZE * TILE_SIZE; p++)
+            {
+                composite[p * 4 + 0] = 255;
+                composite[p * 4 + 1] = 0;
+                composite[p * 4 + 2] = 255;
+                composite[p * 4 + 3] = 255;
+            }
+        }
+        glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0,
+                        0, 0, TEX_GRASS_SIDE,
+                        TILE_SIZE, TILE_SIZE, 1,
+                        GL_RGBA, GL_UNSIGNED_BYTE, composite);
+        if (dirtPx) stbi_image_free(dirtPx);
+        if (overlayPx) stbi_image_free(overlayPx);
     }
-    else
-    {
-        std::cerr << "Failed to load texture at " << texturePath << ": "
-                  << stbi_failure_reason() << std::endl;
-        unsigned char fallback[] = {255, 0, 255, 255};
-        glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_RGBA8, 1, 1, 1, 0,
-                     GL_RGBA, GL_UNSIGNED_BYTE, fallback);
-    }
-    stbi_image_free(data);
+
+
+    glGenerateMipmap(GL_TEXTURE_2D_ARRAY);
+    std::cout << "Loaded " << NUM_LAYERS << " block textures" << std::endl;
 
     initBlockTypes();
 
-    std::string hudIconPath = resolveTexturePath("assets/textures/hud_blocks");
-    loadBlockIcons(hudIconPath);
+    itemModelShader = std::make_unique<Shader>("item_model.vert", "item_model.frag");
+    itemModelShader->Activate();
+    glUniform1i(glGetUniformLocation(itemModelShader->ID, "textureArray"), 0);
+    itemTransformLoc    = glGetUniformLocation(itemModelShader->ID, "transform");
+    itemTimeOfDayLoc    = glGetUniformLocation(itemModelShader->ID, "timeOfDay");
+    itemAmbientLightLoc = glGetUniformLocation(itemModelShader->ID, "ambientLight");
+
     loadItemModels();
+    generateBlockIcons(textureArray, itemModelShader.get());
     loadToolModels();
 
     for (int i = 0; i < 10; ++i)
@@ -123,13 +190,6 @@ void Renderer::init()
     destroyAmbientLightLoc = glGetUniformLocation(destroyShader->ID, "ambientLight");
     destroySkyLightLoc     = glGetUniformLocation(destroyShader->ID, "SkyLight");
     destroyFaceShadeLoc    = glGetUniformLocation(destroyShader->ID, "FaceShade");
-
-    itemModelShader = std::make_unique<Shader>("item_model.vert", "item_model.frag");
-    itemModelShader->Activate();
-    glUniform1i(glGetUniformLocation(itemModelShader->ID, "textureArray"), 0);
-    itemTransformLoc    = glGetUniformLocation(itemModelShader->ID, "transform");
-    itemTimeOfDayLoc    = glGetUniformLocation(itemModelShader->ID, "timeOfDay");
-    itemAmbientLightLoc = glGetUniformLocation(itemModelShader->ID, "ambientLight");
 
     toolModelShader = std::make_unique<Shader>("tool_model.vert", "tool_model.frag");
     toolModelShader->Activate();
@@ -229,6 +289,13 @@ void Renderer::cleanup()
 
 void Renderer::beginFrame(const FrameParams& fp)
 {
+    frustumSolidTested = 0;
+    frustumSolidCulled = 0;
+    frustumSolidDrawn = 0;
+    frustumWaterTested = 0;
+    frustumWaterCulled = 0;
+    frustumWaterDrawn = 0;
+
     shaderProgram->Activate();
     glBindTexture(GL_TEXTURE_2D_ARRAY, textureArray);
 
@@ -251,22 +318,39 @@ void Renderer::beginFrame(const FrameParams& fp)
 
 void Renderer::renderChunks(const FrameParams& fp, ChunkManager& cm)
 {
+    const glm::mat4 viewProj = fp.proj * fp.view;
+    const Frustum frustum = Frustum::fromMatrix(viewProj);
+    const float chunkSizeF = static_cast<float>(CHUNK_SIZE);
+
     for (auto& pair : cm.chunks)
     {
         Chunk* chunk = pair.second.get();
-        if (chunk->indexCount > 0)
-        {
-            glm::mat4 chunkModel = glm::translate(glm::mat4(1.0f),
-                glm::vec3(chunk->position.x * CHUNK_SIZE,
-                           chunk->position.y * CHUNK_SIZE,
-                           chunk->position.z * CHUNK_SIZE));
-            glm::mat4 chunkMVP = fp.proj * fp.view * chunkModel;
-            glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(chunkMVP));
-            glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(chunkModel));
+        if (chunk->indexCount == 0)
+            continue;
+        frustumSolidTested++;
 
-            glBindVertexArray(chunk->vao);
-            glDrawElements(GL_TRIANGLES, chunk->indexCount, GL_UNSIGNED_INT, 0);
+        const glm::vec3 chunkMin = glm::vec3(chunk->position) * chunkSizeF;
+        const glm::vec3 chunkMax = chunkMin + glm::vec3(chunkSizeF);
+
+        if (!frustum.intersectsAABB(chunkMin, chunkMax))
+        {
+            frustumSolidCulled++;
+            continue;
         }
+
+        glm::mat4 chunkModel = glm::translate(
+            glm::mat4(1.0f),
+            glm::vec3(chunk->position.x * CHUNK_SIZE,
+                      chunk->position.y * CHUNK_SIZE,
+                      chunk->position.z * CHUNK_SIZE));
+        glm::mat4 chunkMVP = viewProj * chunkModel;
+
+        glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(chunkMVP));
+        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(chunkModel));
+
+        glBindVertexArray(chunk->vao);
+        glDrawElements(GL_TRIANGLES, chunk->indexCount, GL_UNSIGNED_INT, 0);
+        frustumSolidDrawn++;
     }
 }
 
@@ -288,22 +372,39 @@ void Renderer::renderWater(const FrameParams& fp, ChunkManager& cm)
     glUniform1f(waterAmbientLightLoc, fp.ambientLight);
     glUniform1i(waterEnableCausticsLoc, enableCaustics ? 1 : 0);
 
+    const glm::mat4 viewProj = fp.proj * fp.view;
+    const Frustum frustum = Frustum::fromMatrix(viewProj);
+    const float chunkSizeF = static_cast<float>(CHUNK_SIZE);
+
     for (auto& pair : cm.chunks)
     {
         Chunk* chunk = pair.second.get();
-        if (chunk->waterIndexCount > 0)
-        {
-            glm::mat4 chunkModel = glm::translate(glm::mat4(1.0f),
-                glm::vec3(chunk->position.x * CHUNK_SIZE,
-                           chunk->position.y * CHUNK_SIZE,
-                           chunk->position.z * CHUNK_SIZE));
-            glm::mat4 chunkMVP = fp.proj * fp.view * chunkModel;
-            glUniformMatrix4fv(waterTransformLoc, 1, GL_FALSE, glm::value_ptr(chunkMVP));
-            glUniformMatrix4fv(waterModelLoc, 1, GL_FALSE, glm::value_ptr(chunkModel));
+        if (chunk->waterIndexCount == 0)
+            continue;
+        frustumWaterTested++;
 
-            glBindVertexArray(chunk->waterVao);
-            glDrawElements(GL_TRIANGLES, chunk->waterIndexCount, GL_UNSIGNED_INT, 0);
+        const glm::vec3 chunkMin = glm::vec3(chunk->position) * chunkSizeF;
+        const glm::vec3 chunkMax = chunkMin + glm::vec3(chunkSizeF);
+
+        if (!frustum.intersectsAABB(chunkMin, chunkMax))
+        {
+            frustumWaterCulled++;
+            continue;
         }
+
+        glm::mat4 chunkModel = glm::translate(
+            glm::mat4(1.0f),
+            glm::vec3(chunk->position.x * CHUNK_SIZE,
+                      chunk->position.y * CHUNK_SIZE,
+                      chunk->position.z * CHUNK_SIZE));
+        glm::mat4 chunkMVP = viewProj * chunkModel;
+
+        glUniformMatrix4fv(waterTransformLoc, 1, GL_FALSE, glm::value_ptr(chunkMVP));
+        glUniformMatrix4fv(waterModelLoc, 1, GL_FALSE, glm::value_ptr(chunkModel));
+
+        glBindVertexArray(chunk->waterVao);
+        glDrawElements(GL_TRIANGLES, chunk->waterIndexCount, GL_UNSIGNED_INT, 0);
+        frustumWaterDrawn++;
     }
 
     glDepthMask(GL_TRUE);

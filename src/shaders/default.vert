@@ -4,6 +4,7 @@ layout (location = 1) in vec2 aLocalUV;
 layout (location = 2) in float aTileIndex;
 layout (location = 3) in float aSkyLight;
 layout (location = 4) in float aFaceShade;
+layout (location = 5) in vec3 aBiomeTint;
 
 out vec2 LocalUV;
 flat out float TileIndex;
@@ -11,6 +12,7 @@ out float SkyLight;
 out float FaceShade;
 out float FragDepth;
 out vec3 WorldPos;
+out vec3 BiomeTint;
 
 uniform mat4 transform;
 uniform mat4 model;
@@ -25,4 +27,5 @@ void main()
    FaceShade = aFaceShade;
    FragDepth = gl_Position.z;
    WorldPos = worldPosition.xyz;
+   BiomeTint = aBiomeTint;
 }

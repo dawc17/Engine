@@ -4,6 +4,7 @@ out vec4 FragColor;
 in vec2 UV;
 flat in float TileIndex;
 in float FaceShade;
+in vec3 BiomeTint;
 
 uniform sampler2DArray textureArray;
 uniform float timeOfDay;
@@ -16,5 +17,7 @@ void main()
         discard;
     float totalLight = max(timeOfDay, ambientLight);
     float finalLight = totalLight * FaceShade;
-    FragColor = vec4(texColor.rgb * finalLight, texColor.a);
+    float tintMask = step(0.998, texColor.a);
+    vec3 tint = mix(vec3(1.0), BiomeTint, tintMask);
+    FragColor = vec4(texColor.rgb * tint * finalLight, 1.0);
 }

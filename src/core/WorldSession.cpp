@@ -131,6 +131,8 @@ void WorldSession::shutdown(Player& player, GLFWwindow* window)
     for (auto& pair : chunkManager->chunks)
     {
         Chunk* chunk = pair.second.get();
+        if (!chunk->dirtyData)
+            continue;
         regionManager->saveChunkData(
             chunk->position.x, chunk->position.y, chunk->position.z, chunk->blocks);
     }

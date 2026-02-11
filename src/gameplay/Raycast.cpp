@@ -27,6 +27,7 @@ void setBlockAtWorld(int wx, int wy, int wz, uint8_t blockId, ChunkManager& chun
   c->blocks[blockIndex(local.x, local.y, local.z)] = blockId;
   c->dirtyMesh = true;
   c->dirtyLight = true;
+  c->dirtyData = true;
 
   for (int i = 0; i < 6; i++)
   {

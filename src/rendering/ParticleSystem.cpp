@@ -120,7 +120,7 @@ void ParticleSystem::render(const glm::mat4& view, const glm::mat4& projection, 
     vao.Unbind();
 }
 
-void ParticleSystem::spawnBlockBreakParticles(const glm::vec3& blockCenter, int tileIndex, float skyLight, int count)
+void ParticleSystem::spawnBlockBreakParticles(const glm::vec3& blockCenter, int tileIndex, float skyLight, int count, const glm::vec4& tint)
 {
     std::uniform_real_distribution<float> posDist(-0.3f, 0.3f);
     std::uniform_real_distribution<float> velXZ(-3.0f, 3.0f);
@@ -137,7 +137,7 @@ void ParticleSystem::spawnBlockBreakParticles(const glm::vec3& blockCenter, int 
         p.maxLifetime = p.lifetime;
         p.size = sizeDist(rng);
         p.tileIndex = static_cast<float>(tileIndex);
-        p.color = glm::vec4(1.0f);
+        p.color = tint;
         p.skyLight = skyLight;
         particles.push_back(p);
     }

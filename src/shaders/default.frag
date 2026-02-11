@@ -7,6 +7,7 @@ in float SkyLight;
 in float FaceShade;
 in float FragDepth;
 in vec3 WorldPos;
+in vec3 BiomeTint;
 
 uniform sampler2DArray textureArray;
 uniform float timeOfDay;
@@ -28,7 +29,9 @@ void main()
     float totalLight = max(skyLightContribution, ambientLight);
     float finalLight = totalLight * FaceShade;
     
-    vec3 litColor = texColor.rgb * finalLight;
+    float tintMask = step(0.998, texColor.a);
+    vec3 tint = mix(vec3(1.0), BiomeTint, tintMask);
+    vec3 litColor = texColor.rgb * tint * finalLight;
     
     float dist = length(WorldPos - cameraPos);
     float fogFactor = 1.0 - exp(-dist * fogDensity);
@@ -40,5 +43,5 @@ void main()
     
     vec3 finalColor = mix(litColor, fogColor, fogFactor);
     
-    FragColor = vec4(finalColor, texColor.a);
+    FragColor = vec4(finalColor, 1.0);
 }

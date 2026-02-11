@@ -18,6 +18,7 @@ set(SOURCES
     world/RegionManager.cpp
     utils/JobSystem.cpp
     world/TerrainGenerator.cpp
+    world/Biome.cpp
     world/CaveGenerator.cpp
     world/WaterSimulator.cpp
     rendering/ParticleSystem.cpp
@@ -27,6 +28,7 @@ set(SOURCES
     ui/HUD.cpp
     core/WorldSession.cpp
     core/Renderer.cpp
+    rendering/Frustum.cpp
 )
 
 add_executable(VoxelEngine ${SOURCES})

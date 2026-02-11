@@ -11,6 +11,7 @@ struct ItemVertex {
     glm::vec2 uv;
     float tileIndex;
     float faceShade;
+    glm::vec3 biomeTint;
 };
 
 struct ItemModel {
