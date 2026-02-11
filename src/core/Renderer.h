@@ -31,6 +31,7 @@ struct Renderer
     GLint transformLoc = 0, modelLoc = 0, timeOfDayLoc = 0;
     GLint cameraPosLoc = 0, skyColorLoc = 0, fogColorLoc = 0;
     GLint fogDensityLoc = 0, ambientLightLoc = 0;
+    GLint biomeDebugTintLoc = 0;
 
     unsigned int textureArray = 0;
 

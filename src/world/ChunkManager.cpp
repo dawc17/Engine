@@ -86,7 +86,7 @@ void ChunkManager::unloadChunk(int cx, int cy, int cz)
 
   if (it != chunks.end())
   {
-    if (regionManager)
+    if (regionManager && it->second->dirtyData)
     {
       regionManager->saveChunkData(cx, cy, cz, it->second->blocks);
     }
@@ -130,7 +130,7 @@ void ChunkManager::enqueueSaveAndUnload(int cx, int cy, int cz)
   if (!chunk)
     return;
 
-  if (jobSystem && regionManager)
+  if (jobSystem && regionManager && chunk->dirtyData)
   {
     savingChunks.insert(key);
 

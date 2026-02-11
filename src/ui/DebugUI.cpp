@@ -110,6 +110,7 @@ void drawDebugUI(
 
             ImGui::Separator();
             ImGui::Checkbox("Wireframe mode", &wireframeMode);
+            ImGui::Checkbox("Biome Debug Colors", &showBiomeDebugColors);
             ImGui::Checkbox("Noclip mode", &player.noclip);
             ImGui::Checkbox("Async Loading", &useAsyncLoading);
             ImGui::SliderFloat("Move Speed", &cameraSpeed, 0.0f, 60.0f);

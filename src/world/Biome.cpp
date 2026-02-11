@@ -7,7 +7,7 @@ namespace
         4,
         4,
         TreeType::None,
-        0.55f,
+        0.80f,
         0.0f
     };
 
@@ -16,7 +16,7 @@ namespace
         2,
         1,
         TreeType::Oak,
-        1.15f,
+        1.05f,
         1.60f
     };
 
@@ -25,7 +25,7 @@ namespace
         2,
         1,
         TreeType::Spruce,
-        0.75,
+        0.95f,
         0.45f
     };
 
@@ -34,7 +34,7 @@ namespace
         2,
         1,
         TreeType::Oak,
-        0.90f,
+        1.00f,
         0.60f
     };
 }

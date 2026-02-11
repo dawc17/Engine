@@ -1,6 +1,7 @@
 #include "Meshing.h"
 #include "../utils/BlockTypes.h"
 #include "../world/ChunkManager.h"
+#include "../world/TerrainGenerator.h"
 #include "../world/WaterSimulator.h"
 #include <glad/glad.h>
 #include <cstddef>
@@ -23,6 +24,19 @@ static const Vertex *FACE_TABLE[6] = {
 static const uint32_t FACE_INDICES[6] = {
     0, 1, 2,
     0, 2, 3};
+
+static glm::vec3 getBiomeDebugTint(int worldX, int worldZ)
+{
+    BiomeID biome = getBiomeAt(worldX, worldZ);
+    switch (biome)
+    {
+        case BiomeID::Desert: return glm::vec3(1.00f, 0.88f, 0.52f);
+        case BiomeID::Forest: return glm::vec3(0.55f, 1.00f, 0.55f);
+        case BiomeID::Tundra: return glm::vec3(0.72f, 0.84f, 1.00f);
+        case BiomeID::Plains: return glm::vec3(1.00f, 0.78f, 0.78f);
+        default: return glm::vec3(1.0f);
+    }
+}
 
 static float getFluidHeight(BlockGetter getBlock, int cornerX, int cornerY, int cornerZ)
 {
@@ -169,6 +183,7 @@ static WaterVertexUV calculateWaterUV(float angle)
 
 static void buildGreedyMesh(
     const BlockID* blocks,
+    const glm::ivec3& chunkWorldOrigin,
     BlockGetter getBlock,
     LightGetter getSkyLight,
     std::vector<Vertex>& outVertices,
@@ -343,6 +358,9 @@ static void buildGreedyMesh(
             int blockX = blockWorldPos.x;
             int blockY = blockWorldPos.y;
             int blockZ = blockWorldPos.z;
+            glm::vec3 biomeTint = getBiomeDebugTint(
+                chunkWorldOrigin.x + blockX,
+                chunkWorldOrigin.z + blockZ);
 
             for (int vIdx = 0; vIdx < 4; vIdx++)
             {
@@ -443,6 +461,7 @@ static void buildGreedyMesh(
               vtx.tileIndex = static_cast<float>(tileIndex);
               vtx.skyLight = skyLightNormalized;
               vtx.faceShade = faceShade;
+              vtx.biomeTint = biomeTint;
 
               outVertices.push_back(vtx);
             }
@@ -662,8 +681,12 @@ void buildChunkMesh(Chunk &c, ChunkManager &chunkManager)
   std::vector<Vertex> waterVerts;
   std::vector<uint32_t> waterInds;
   
-  buildGreedyMesh(c.blocks, getBlock, getSkyLight, verts, inds, false);
-  buildGreedyMesh(c.blocks, getBlock, getSkyLight, waterVerts, waterInds, true);
+  glm::ivec3 chunkWorldOrigin(
+      c.position.x * CHUNK_SIZE,
+      c.position.y * CHUNK_SIZE,
+      c.position.z * CHUNK_SIZE);
+  buildGreedyMesh(c.blocks, chunkWorldOrigin, getBlock, getSkyLight, verts, inds, false);
+  buildGreedyMesh(c.blocks, chunkWorldOrigin, getBlock, getSkyLight, waterVerts, waterInds, true);
   
   uploadToGPU(c, verts, inds);
   uploadWaterToGPU(c, waterVerts, waterInds);
@@ -704,6 +727,10 @@ void uploadToGPU(Chunk &c, const std::vector<Vertex> &verts, const std::vector<u
   glVertexAttribPointer(4, 1, GL_FLOAT, GL_FALSE, sizeof(Vertex),
                         (void *)offsetof(Vertex, faceShade));
   glEnableVertexAttribArray(4);
+
+  glVertexAttribPointer(5, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+                        (void *)offsetof(Vertex, biomeTint));
+  glEnableVertexAttribArray(5);
 
   c.indexCount = static_cast<uint32_t>(inds.size());
   c.vertexCount = static_cast<uint32_t>(verts.size());
@@ -759,6 +786,10 @@ void uploadWaterToGPU(Chunk &c, const std::vector<Vertex> &verts, const std::vec
                         (void *)offsetof(Vertex, faceShade));
   glEnableVertexAttribArray(4);
 
+  glVertexAttribPointer(5, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+                        (void *)offsetof(Vertex, biomeTint));
+  glEnableVertexAttribArray(5);
+
   c.waterIndexCount = static_cast<uint32_t>(inds.size());
   c.waterVertexCount = static_cast<uint32_t>(verts.size());
 }
@@ -766,6 +797,7 @@ void uploadWaterToGPU(Chunk &c, const std::vector<Vertex> &verts, const std::vec
 void buildChunkMeshOffThread(
     const BlockID* blocks,
     const uint8_t* skyLight,
+    const glm::ivec3& chunkWorldOrigin,
     BlockGetter getBlock,
     LightGetter getSkyLight,
     std::vector<Vertex>& outVertices,
@@ -773,6 +805,6 @@ void buildChunkMeshOffThread(
     std::vector<Vertex>& outWaterVertices,
     std::vector<uint32_t>& outWaterIndices)
 {
-  buildGreedyMesh(blocks, getBlock, getSkyLight, outVertices, outIndices, false);
-  buildGreedyMesh(blocks, getBlock, getSkyLight, outWaterVertices, outWaterIndices, true);
+  buildGreedyMesh(blocks, chunkWorldOrigin, getBlock, getSkyLight, outVertices, outIndices, false);
+  buildGreedyMesh(blocks, chunkWorldOrigin, getBlock, getSkyLight, outWaterVertices, outWaterIndices, true);
 }

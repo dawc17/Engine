@@ -47,6 +47,7 @@ std::string currentWorldName;
 float fov = 70.0f;
 float mouseSensitivity = 0.1f;
 bool wireframeMode = false;
+bool showBiomeDebugColors = false;
 
 bool drunkMode = false;
 float drunkIntensity = 1.0f;

@@ -17,6 +17,8 @@
 #include <array>
 #include <algorithm>
 
+extern bool showBiomeDebugColors;
+
 void Renderer::init()
 {
     shaderProgram = std::make_unique<Shader>("default.vert", "default.frag");
@@ -30,6 +32,7 @@ void Renderer::init()
     fogColorLoc   = glGetUniformLocation(shaderProgram->ID, "fogColor");
     fogDensityLoc = glGetUniformLocation(shaderProgram->ID, "fogDensity");
     ambientLightLoc = glGetUniformLocation(shaderProgram->ID, "ambientLight");
+    biomeDebugTintLoc = glGetUniformLocation(shaderProgram->ID, "useBiomeDebugTint");
 
     stbi_set_flip_vertically_on_load(false);
 
@@ -256,6 +259,7 @@ void Renderer::beginFrame(const FrameParams& fp)
     glUniform3fv(fogColorLoc, 1, glm::value_ptr(fp.fogCol));
     glUniform1f(fogDensityLoc, fp.effectiveFogDensity);
     glUniform1f(ambientLightLoc, fp.ambientLight);
+    glUniform1i(biomeDebugTintLoc, showBiomeDebugColors ? 1 : 0);
 }
 
 void Renderer::renderChunks(const FrameParams& fp, ChunkManager& cm)

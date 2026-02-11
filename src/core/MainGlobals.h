@@ -35,6 +35,7 @@ extern std::string currentWorldName;
 extern float fov;
 extern float mouseSensitivity;
 extern bool wireframeMode;
+extern bool showBiomeDebugColors;
 
 extern bool drunkMode;
 extern float drunkIntensity;

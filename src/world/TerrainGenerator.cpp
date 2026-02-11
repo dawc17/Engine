@@ -83,7 +83,25 @@ static BiomeID sampleBiome(float worldX, float worldZ)
     );
 }
 
-static double getTerrainHeight(float worldX, float worldZ, const BiomeDefinition& biome)
+static float sampleTerrainAmplitude(float worldX, float worldZ)
+{
+    constexpr float SAMPLE_OFFSET = 12.0f;
+    BiomeID b0 = sampleBiome(worldX, worldZ);
+    BiomeID b1 = sampleBiome(worldX + SAMPLE_OFFSET, worldZ);
+    BiomeID b2 = sampleBiome(worldX - SAMPLE_OFFSET, worldZ);
+    BiomeID b3 = sampleBiome(worldX, worldZ + SAMPLE_OFFSET);
+    BiomeID b4 = sampleBiome(worldX, worldZ - SAMPLE_OFFSET);
+
+    float a0 = getBiomeDefinition(b0).terrainAmplitude;
+    float a1 = getBiomeDefinition(b1).terrainAmplitude;
+    float a2 = getBiomeDefinition(b2).terrainAmplitude;
+    float a3 = getBiomeDefinition(b3).terrainAmplitude;
+    float a4 = getBiomeDefinition(b4).terrainAmplitude;
+
+    return a0 * 0.5f + (a1 + a2 + a3 + a4) * 0.125f;
+}
+
+static double getTerrainHeight(float worldX, float worldZ, float terrainAmplitude)
 {
     double continentNoise = perlin.octave2D_01(
         worldX * 0.002,
@@ -111,7 +129,7 @@ static double getTerrainHeight(float worldX, float worldZ, const BiomeDefinition
     double blendedNoise = continentNoise * 0.4 + hillNoise * 0.5 + detailNoise * 0.1;
     blendedNoise = blendedNoise * blendedNoise * (3.0 - 2.0 * blendedNoise);
 
-    return BASE_HEIGHT + blendedNoise * (HEIGHT_VARIATION * biome.terrainAmplitude);
+    return BASE_HEIGHT + blendedNoise * (HEIGHT_VARIATION * terrainAmplitude);
 }
 
 static void setBlockIfInChunk(BlockID* blocks, int localX, int localY, int localZ, uint8_t blockId, bool overwriteSolid = false)
@@ -143,7 +161,24 @@ void generateTerrain(BlockID* blocks, int cx, int cy, int cz)
 
             BiomeID biomeId = sampleBiome(worldX, worldZ);
             const BiomeDefinition& biome = getBiomeDefinition(biomeId);
-            int terrainHeight = static_cast<int>(std::round(getTerrainHeight(worldX, worldZ, biome)));
+            float terrainAmplitude = sampleTerrainAmplitude(worldX, worldZ);
+            int terrainHeight = static_cast<int>(std::round(getTerrainHeight(worldX, worldZ, terrainAmplitude)));
+            uint8_t surfaceBlock = biome.surfaceBlock;
+            uint8_t fillerBlock = biome.fillerBlock;
+            if (terrainHeight < SEA_LEVEL)
+            {
+                surfaceBlock = biome.fillerBlock;
+            }
+
+            int beachMaxHeight = biomeId == BiomeID::Plains ? SEA_LEVEL : SEA_LEVEL + 1;
+            bool isBeachColumn = biomeId != BiomeID::Desert &&
+                                 terrainHeight >= SEA_LEVEL - 1 &&
+                                 terrainHeight <= beachMaxHeight;
+            if (isBeachColumn)
+            {
+                surfaceBlock = BLOCK_SAND;
+                fillerBlock = BLOCK_SAND;
+            }
 
             for (int y = 0; y < CHUNK_SIZE; y++)
             {
@@ -163,25 +198,11 @@ void generateTerrain(BlockID* blocks, int cx, int cy, int cz)
                 }
                 else if (worldY == terrainHeight)
                 {
-                    if (terrainHeight <= SEA_LEVEL + 2)
-                    {
-                        blocks[i] = BLOCK_SAND;
-                    }
-                    else
-                    {
-                        blocks[i] = biome.surfaceBlock;
-                    }
+                    blocks[i] = surfaceBlock;
                 }
                 else if (worldY > terrainHeight - DIRT_DEPTH)
                 {
-                    if (terrainHeight <= SEA_LEVEL + 2)
-                    {
-                        blocks[i] = BLOCK_SAND;
-                    }
-                    else
-                    {
-                        blocks[i] = biome.fillerBlock;
-                    }
+                    blocks[i] = fillerBlock;
                 }
                 else
                 {
@@ -207,8 +228,10 @@ void generateTerrain(BlockID* blocks, int cx, int cy, int cz)
             if (!shouldPlaceTree(worldX, worldZ, TREE_SPAWN_CHANCE * biome.treeDensity))
                 continue;
 
+            float terrainAmplitude = sampleTerrainAmplitude(
+                static_cast<float>(worldX), static_cast<float>(worldZ));
             int terrainHeight = static_cast<int>(std::round(getTerrainHeight(
-                static_cast<float>(worldX), static_cast<float>(worldZ), biome)));
+                static_cast<float>(worldX), static_cast<float>(worldZ), terrainAmplitude)));
 
             if (terrainHeight <= SEA_LEVEL + 2)
                 continue;
@@ -260,11 +283,11 @@ BiomeID getBiomeAt(int worldX, int worldZ)
 
 int getTerrainHeightAt(int worldX, int worldZ)
 {
-    BiomeID biomeId = sampleBiome(static_cast<float>(worldX), static_cast<float>(worldZ));
-    const BiomeDefinition& biome = getBiomeDefinition(biomeId);
+    float terrainAmplitude = sampleTerrainAmplitude(
+        static_cast<float>(worldX), static_cast<float>(worldZ));
 
     return static_cast<int>(std::round(getTerrainHeight(
-        static_cast<float>(worldX), static_cast<float>(worldZ), biome)));
+        static_cast<float>(worldX), static_cast<float>(worldZ), terrainAmplitude)));
 }
 
 void getTerrainHeightsForChunk(int cx, int cz, int* outHeights)

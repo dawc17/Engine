@@ -12,6 +12,7 @@ struct Vertex
   float tileIndex;
   float skyLight;
   float faceShade;
+  glm::vec3 biomeTint;
 };
 
 enum FaceDir {
@@ -44,6 +45,7 @@ using LightGetter = std::function<uint8_t(int x, int y, int z)>;
 void buildChunkMeshOffThread(
     const BlockID* blocks,
     const uint8_t* skyLight,
+    const glm::ivec3& chunkWorldOrigin,
     BlockGetter getBlock,
     LightGetter getSkyLight,
     std::vector<Vertex>& outVertices,
