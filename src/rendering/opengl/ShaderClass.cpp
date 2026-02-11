@@ -1,4 +1,6 @@
 #include"ShaderClass.h"
+#include "embedded_assets.h"
+#include <cstring>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -29,42 +31,31 @@ std::filesystem::path getExecutableDir()
 
 std::string get_file_contents(const char* filename)
 {
-	namespace fs = std::filesystem;
-
-	auto read_stream = [](std::ifstream& in) {
-		std::string contents;
-		in.seekg(0, std::ios::end);
-		contents.resize(static_cast<size_t>(in.tellg()));
-		in.seekg(0, std::ios::beg);
-		in.read(&contents[0], contents.size());
-		in.close();
-		return contents;
+	struct Entry { const char* name; const unsigned char* data; unsigned int size; };
+	static const Entry shaders[] = {
+		{"default.vert", embed_default_vert_data, embed_default_vert_size},
+		{"default.frag", embed_default_frag_data, embed_default_frag_size},
+		{"selection.vert", embed_selection_vert_data, embed_selection_vert_size},
+		{"selection.frag", embed_selection_frag_data, embed_selection_frag_size},
+		{"destroy.vert", embed_destroy_vert_data, embed_destroy_vert_size},
+		{"destroy.frag", embed_destroy_frag_data, embed_destroy_frag_size},
+		{"water.vert", embed_water_vert_data, embed_water_vert_size},
+		{"water.frag", embed_water_frag_data, embed_water_frag_size},
+		{"particle.vert", embed_particle_vert_data, embed_particle_vert_size},
+		{"particle.frag", embed_particle_frag_data, embed_particle_frag_size},
+		{"item_model.vert", embed_item_model_vert_data, embed_item_model_vert_size},
+		{"item_model.frag", embed_item_model_frag_data, embed_item_model_frag_size},
+		{"tool_model.vert", embed_tool_model_vert_data, embed_tool_model_vert_size},
+		{"tool_model.frag", embed_tool_model_frag_data, embed_tool_model_frag_size},
 	};
 
-	std::ifstream in(filename, std::ios::binary);
-	if (in)
+	for (const auto& s : shaders)
 	{
-		return read_stream(in);
+		if (std::strcmp(filename, s.name) == 0)
+			return std::string(reinterpret_cast<const char*>(s.data), s.size);
 	}
 
-	fs::path exeDir = getExecutableDir();
-	fs::path shadersPath = exeDir / "shaders" / filename;
-	in.open(shadersPath, std::ios::binary);
-	if (in)
-	{
-		return read_stream(in);
-	}
-
-#ifdef SHADER_DIR
-	fs::path fallback = fs::path(SHADER_DIR) / filename;
-	in.open(fallback, std::ios::binary);
-	if (in)
-	{
-		return read_stream(in);
-	}
-#endif
-
-	throw std::runtime_error("Failed to open shader file: " + fs::path(filename).string());
+	throw std::runtime_error("Embedded shader not found: " + std::string(filename));
 }
 
 Shader::Shader(const char* vertexFile, const char* fragmentFile)

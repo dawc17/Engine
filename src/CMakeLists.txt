@@ -31,7 +31,63 @@ set(SOURCES
     rendering/Frustum.cpp
 )
 
-add_executable(VoxelEngine ${SOURCES})
+include(${CMAKE_SOURCE_DIR}/cmake/embed_resources.cmake)
+
+set(_EMBED_H "#pragma once\n\n")
+set(_EMBED_CPP "#include \"embedded_assets.h\"\n\n")
+
+set(_TEX "${CMAKE_SOURCE_DIR}/assets/textures")
+set(_SHD "${CMAKE_SOURCE_DIR}/src/shaders")
+
+embed_asset(embed_dirt_png                  "${_TEX}/dirt.png")
+embed_asset(embed_grass_top_png             "${_TEX}/grass_top.png")
+embed_asset(embed_grass_side_snowed_png     "${_TEX}/grass_side_snowed.png")
+embed_asset(embed_stone_png                 "${_TEX}/stone.png")
+embed_asset(embed_sand_png                  "${_TEX}/sand.png")
+embed_asset(embed_log_oak_png               "${_TEX}/log_oak.png")
+embed_asset(embed_log_oak_top_png           "${_TEX}/log_oak_top.png")
+embed_asset(embed_leaves_oak_png            "${_TEX}/leaves_oak.png")
+embed_asset(embed_glass_png                 "${_TEX}/glass.png")
+embed_asset(embed_planks_oak_png            "${_TEX}/planks_oak.png")
+embed_asset(embed_cobblestone_png           "${_TEX}/cobblestone.png")
+embed_asset(embed_log_spruce_png            "${_TEX}/log_spruce.png")
+embed_asset(embed_log_spruce_top_png        "${_TEX}/log_spruce_top.png")
+embed_asset(embed_leaves_spruce_png         "${_TEX}/leaves_spruce.png")
+embed_asset(embed_planks_spruce_png         "${_TEX}/planks_spruce.png")
+embed_asset(embed_snow_png                  "${_TEX}/snow.png")
+embed_asset(embed_grass_side_overlay_png    "${_TEX}/grass_side_overlay.png")
+embed_asset(embed_diamond_pickaxe_png       "${_TEX}/tools/diamond_pickaxe.png")
+
+embed_asset(embed_destroy_stage_0_png       "${_TEX}/destroy/destroy_stage_0.png")
+embed_asset(embed_destroy_stage_1_png       "${_TEX}/destroy/destroy_stage_1.png")
+embed_asset(embed_destroy_stage_2_png       "${_TEX}/destroy/destroy_stage_2.png")
+embed_asset(embed_destroy_stage_3_png       "${_TEX}/destroy/destroy_stage_3.png")
+embed_asset(embed_destroy_stage_4_png       "${_TEX}/destroy/destroy_stage_4.png")
+embed_asset(embed_destroy_stage_5_png       "${_TEX}/destroy/destroy_stage_5.png")
+embed_asset(embed_destroy_stage_6_png       "${_TEX}/destroy/destroy_stage_6.png")
+embed_asset(embed_destroy_stage_7_png       "${_TEX}/destroy/destroy_stage_7.png")
+embed_asset(embed_destroy_stage_8_png       "${_TEX}/destroy/destroy_stage_8.png")
+embed_asset(embed_destroy_stage_9_png       "${_TEX}/destroy/destroy_stage_9.png")
+
+embed_asset(embed_default_vert              "${_SHD}/default.vert")
+embed_asset(embed_default_frag              "${_SHD}/default.frag")
+embed_asset(embed_selection_vert            "${_SHD}/selection.vert")
+embed_asset(embed_selection_frag            "${_SHD}/selection.frag")
+embed_asset(embed_destroy_vert              "${_SHD}/destroy.vert")
+embed_asset(embed_destroy_frag              "${_SHD}/destroy.frag")
+embed_asset(embed_water_vert                "${_SHD}/water.vert")
+embed_asset(embed_water_frag                "${_SHD}/water.frag")
+embed_asset(embed_particle_vert             "${_SHD}/particle.vert")
+embed_asset(embed_particle_frag             "${_SHD}/particle.frag")
+embed_asset(embed_item_model_vert           "${_SHD}/item_model.vert")
+embed_asset(embed_item_model_frag           "${_SHD}/item_model.frag")
+embed_asset(embed_tool_model_vert           "${_SHD}/tool_model.vert")
+embed_asset(embed_tool_model_frag           "${_SHD}/tool_model.frag")
+
+set(EMBED_DIR "${CMAKE_BINARY_DIR}/generated")
+embed_finalize("${EMBED_DIR}")
+
+add_executable(VoxelEngine ${SOURCES} "${EMBED_DIR}/embedded_assets.cpp")
 target_include_directories(VoxelEngine PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/core
@@ -44,36 +100,6 @@ target_include_directories(VoxelEngine PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty
 )
 
-set(SHADER_FILES
-    ${CMAKE_CURRENT_SOURCE_DIR}/shaders/default.vert
-    ${CMAKE_CURRENT_SOURCE_DIR}/shaders/default.frag
-    ${CMAKE_CURRENT_SOURCE_DIR}/shaders/selection.vert
-    ${CMAKE_CURRENT_SOURCE_DIR}/shaders/selection.frag
-    ${CMAKE_CURRENT_SOURCE_DIR}/shaders/destroy.vert
-    ${CMAKE_CURRENT_SOURCE_DIR}/shaders/destroy.frag
-    ${CMAKE_CURRENT_SOURCE_DIR}/shaders/water.vert
-    ${CMAKE_CURRENT_SOURCE_DIR}/shaders/water.frag
-    ${CMAKE_CURRENT_SOURCE_DIR}/shaders/particle.vert
-    ${CMAKE_CURRENT_SOURCE_DIR}/shaders/particle.frag
-    ${CMAKE_CURRENT_SOURCE_DIR}/shaders/item_model.vert
-    ${CMAKE_CURRENT_SOURCE_DIR}/shaders/item_model.frag
-    ${CMAKE_CURRENT_SOURCE_DIR}/shaders/tool_model.vert
-    ${CMAKE_CURRENT_SOURCE_DIR}/shaders/tool_model.frag
-
-)
-
-add_custom_target(copy_shaders ALL
-    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:VoxelEngine>/shaders"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SHADER_FILES} "$<TARGET_FILE_DIR:VoxelEngine>/shaders/"
-    DEPENDS ${SHADER_FILES}
-    COMMENT "Copying shader files"
-)
-
-add_custom_command(TARGET VoxelEngine POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_SOURCE_DIR}/assets"
-        "$<TARGET_FILE_DIR:VoxelEngine>/assets"
-)
 
 # === ZLIB ===
 include(FetchContent)
@@ -117,7 +143,7 @@ target_include_directories(VoxelEngine PUBLIC
     ${IMGUI_DIR}/backends
 )
 
-target_compile_definitions(VoxelEngine PRIVATE SHADER_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/shaders\")
+target_include_directories(VoxelEngine PRIVATE "${CMAKE_BINARY_DIR}/generated")
 
 # === GLFW & OpenGL ===
 if (WIN32)

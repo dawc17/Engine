@@ -26,7 +26,7 @@ inline bool isToolItem(uint8_t id) { return id >= TOOL_ID_START; }
 
 class ToolModelGenerator {
     public:
-    static ToolModel generateFromSprite(const std::string& imagePath);
+    static ToolModel generateFromSprite(const unsigned char* pngData, unsigned int pngSize);
     static void destroyModel(ToolModel& model);
 };
 

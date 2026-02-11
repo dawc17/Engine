@@ -1,4 +1,5 @@
 #include "ToolModelGenerator.h"
+#include "embedded_assets.h"
 #include "../core/MainGlobals.h"
 #include "../thirdparty/stb_image.h"
 #include "Meshing.h"
@@ -13,12 +14,12 @@
 std::unordered_map<uint8_t, ToolModel> g_toolModels;
 std::unordered_map<uint8_t, GLuint> g_toolIcons;
 
-ToolModel ToolModelGenerator::generateFromSprite(const std::string &imagePath) {
+ToolModel ToolModelGenerator::generateFromSprite(const unsigned char* pngData, unsigned int pngSize) {
   int width, height, channels;
   unsigned char *data =
-      stbi_load(imagePath.c_str(), &width, &height, &channels, 4);
+      stbi_load_from_memory(pngData, static_cast<int>(pngSize), &width, &height, &channels, 4);
   if (!data) {
-    std::cerr << "Failed to load tool sprite: " << imagePath << std::endl;
+    std::cerr << "Failed to decode tool sprite from embedded data" << std::endl;
     return {};
   }
 
@@ -177,24 +178,24 @@ void loadToolModels()
 {
     struct ToolDef {
         uint8_t id;
-        std::string spritePath;
+        const unsigned char* data;
+        unsigned int size;
     };
 
     ToolDef tools[] = {
-        {TOOL_DIAMOND_PICKAXE, "assets/textures/tools/diamond_pickaxe.png"},
+        {TOOL_DIAMOND_PICKAXE, embed_diamond_pickaxe_png_data, embed_diamond_pickaxe_png_size},
     };
 
     for (const auto &tool : tools)
     {
-        std::string resolvedSprite = resolveTexturePath(tool.spritePath);
-        ToolModel model = ToolModelGenerator::generateFromSprite(resolvedSprite);
+        ToolModel model = ToolModelGenerator::generateFromSprite(tool.data, tool.size);
         if (model.indexCount > 0)
         {
             g_toolModels[tool.id] = model;
             std::cout << "Generated tool model for tool " << (int)tool.id << std::endl;
         }
 
-        GLuint icon = loadHUDIcon(resolvedSprite, true);
+        GLuint icon = loadHUDIcon(tool.data, tool.size, true);
         if (icon != 0)
             g_toolIcons[tool.id] = icon;
     }

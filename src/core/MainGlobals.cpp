@@ -5,6 +5,7 @@
 #include <iostream>
 #include <sstream>
 #include <thread>
+#include "embedded_assets.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -121,13 +122,13 @@ void limitFPS(int targetFPS)
   lastFrameTime = FrameClock::now();
 }
 
-GLuint loadHUDIcon(const std::string& path, bool useNearest)
+GLuint loadHUDIcon(const unsigned char* pngData, unsigned int pngSize, bool useNearest)
 {
   int width, height, channels;
-  unsigned char* data = stbi_load(path.c_str(), &width, &height, &channels, 4);
+  unsigned char* data = stbi_load_from_memory(pngData, static_cast<int>(pngSize), &width, &height, &channels, 4);
   if (!data)
   {
-    std::cerr << "Failed to load HUD icon: " << path << std::endl;
+    std::cerr << "Failed to decode HUD icon from embedded data" << std::endl;
     return 0;
   }
 
@@ -501,31 +502,6 @@ void processInput(GLFWwindow* window, Player& player, float dt)
   }
 }
 
-std::string resolveTexturePath(const std::string& relativePath)
-{
-  namespace fs = std::filesystem;
-
-  fs::path direct(relativePath);
-  if (fs::exists(direct))
-  {
-    return direct.string();
-  }
-
-  fs::path exeDir = getExecutableDir();
-  fs::path fromExe = exeDir / relativePath;
-  if (fs::exists(fromExe))
-  {
-    return fromExe.string();
-  }
-
-  fs::path fromBuild = fs::path("..") / relativePath;
-  if (fs::exists(fromBuild))
-  {
-    return fromBuild.string();
-  }
-
-  return relativePath;
-}
 
 void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
 {

@@ -14,6 +14,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <iostream>
 #include <array>
+#include "embedded_assets.h"
 
 void Renderer::init()
 {
@@ -51,31 +52,30 @@ void Renderer::init()
                  TILE_SIZE, TILE_SIZE, NUM_LAYERS, 0,
                  GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
 
-    struct TexEntry { int layer; const char* filename; };
+    struct TexEntry { int layer; const unsigned char* data; unsigned int size; };
     TexEntry entries[] = {
-        { TEX_DIRT,             "dirt.png" },
-        { TEX_GRASS_TOP,        "grass_top.png" },
-        { TEX_GRASS_SIDE_SNOWED,"grass_side_snowed.png" },
-        { TEX_STONE,            "stone.png" },
-        { TEX_SAND,             "sand.png" },
-        { TEX_LOG_OAK,          "log_oak.png" },
-        { TEX_LOG_OAK_TOP,      "log_oak_top.png" },
-        { TEX_LEAVES_OAK,       "leaves_oak.png" },
-        { TEX_GLASS,            "glass.png" },
-        { TEX_PLANKS_OAK,       "planks_oak.png" },
-        { TEX_COBBLESTONE,      "cobblestone.png" },
-        { TEX_LOG_SPRUCE,       "log_spruce.png" },
-        { TEX_LOG_SPRUCE_TOP,   "log_spruce_top.png" },
-        { TEX_LEAVES_SPRUCE,    "leaves_spruce.png" },
-        { TEX_PLANKS_SPRUCE,    "planks_spruce.png" },
-        { TEX_SNOW,             "snow.png" },
+        { TEX_DIRT,              embed_dirt_png_data,              embed_dirt_png_size },
+        { TEX_GRASS_TOP,         embed_grass_top_png_data,         embed_grass_top_png_size },
+        { TEX_GRASS_SIDE_SNOWED, embed_grass_side_snowed_png_data, embed_grass_side_snowed_png_size },
+        { TEX_STONE,             embed_stone_png_data,             embed_stone_png_size },
+        { TEX_SAND,              embed_sand_png_data,              embed_sand_png_size },
+        { TEX_LOG_OAK,           embed_log_oak_png_data,           embed_log_oak_png_size },
+        { TEX_LOG_OAK_TOP,       embed_log_oak_top_png_data,       embed_log_oak_top_png_size },
+        { TEX_LEAVES_OAK,        embed_leaves_oak_png_data,        embed_leaves_oak_png_size },
+        { TEX_GLASS,             embed_glass_png_data,             embed_glass_png_size },
+        { TEX_PLANKS_OAK,        embed_planks_oak_png_data,        embed_planks_oak_png_size },
+        { TEX_COBBLESTONE,       embed_cobblestone_png_data,       embed_cobblestone_png_size },
+        { TEX_LOG_SPRUCE,        embed_log_spruce_png_data,        embed_log_spruce_png_size },
+        { TEX_LOG_SPRUCE_TOP,    embed_log_spruce_top_png_data,    embed_log_spruce_top_png_size },
+        { TEX_LEAVES_SPRUCE,     embed_leaves_spruce_png_data,     embed_leaves_spruce_png_size },
+        { TEX_PLANKS_SPRUCE,     embed_planks_spruce_png_data,     embed_planks_spruce_png_size },
+        { TEX_SNOW,              embed_snow_png_data,              embed_snow_png_size },
     };
 
     for (const auto& e : entries)
     {
-        std::string path = resolveTexturePath(std::string("assets/textures/") + e.filename);
         int w = 0, h = 0, ch = 0;
-        unsigned char* pixels = stbi_load(path.c_str(), &w, &h, &ch, 4);
+        unsigned char* pixels = stbi_load_from_memory(e.data, static_cast<int>(e.size), &w, &h, &ch, 4);
         if (pixels)
         {
             glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0,
@@ -86,7 +86,6 @@ void Renderer::init()
         }
         else
         {
-            std::cerr << "Failed to load texture: " << path << std::endl;
             unsigned char fallback[TILE_SIZE * TILE_SIZE * 4];
             for (int p = 0; p < TILE_SIZE * TILE_SIZE; p++)
             {
@@ -103,11 +102,9 @@ void Renderer::init()
     }
 
     {
-        std::string dirtPath = resolveTexturePath("assets/textures/dirt.png");
-        std::string overlayPath = resolveTexturePath("assets/textures/grass_side_overlay.png");
         int dw = 0, dh = 0, dch = 0, ow = 0, oh = 0, och = 0;
-        unsigned char* dirtPx = stbi_load(dirtPath.c_str(), &dw, &dh, &dch, 4);
-        unsigned char* overlayPx = stbi_load(overlayPath.c_str(), &ow, &oh, &och, 4);
+        unsigned char* dirtPx = stbi_load_from_memory(embed_dirt_png_data, static_cast<int>(embed_dirt_png_size), &dw, &dh, &dch, 4);
+        unsigned char* overlayPx = stbi_load_from_memory(embed_grass_side_overlay_png_data, static_cast<int>(embed_grass_side_overlay_png_size), &ow, &oh, &och, 4);
 
         unsigned char composite[TILE_SIZE * TILE_SIZE * 4];
         if (dirtPx && overlayPx)
@@ -171,11 +168,23 @@ void Renderer::init()
     generateBlockIcons(textureArray, itemModelShader.get());
     loadToolModels();
 
-    for (int i = 0; i < 10; ++i)
     {
-        std::string destroyPath = resolveTexturePath(
-            "assets/textures/destroy/destroy_stage_" + std::to_string(i) + ".png");
-        destroyTextures[i] = loadHUDIcon(destroyPath, true);
+        const unsigned char* dData[] = {
+            embed_destroy_stage_0_png_data, embed_destroy_stage_1_png_data,
+            embed_destroy_stage_2_png_data, embed_destroy_stage_3_png_data,
+            embed_destroy_stage_4_png_data, embed_destroy_stage_5_png_data,
+            embed_destroy_stage_6_png_data, embed_destroy_stage_7_png_data,
+            embed_destroy_stage_8_png_data, embed_destroy_stage_9_png_data,
+        };
+        const unsigned int dSizes[] = {
+            embed_destroy_stage_0_png_size, embed_destroy_stage_1_png_size,
+            embed_destroy_stage_2_png_size, embed_destroy_stage_3_png_size,
+            embed_destroy_stage_4_png_size, embed_destroy_stage_5_png_size,
+            embed_destroy_stage_6_png_size, embed_destroy_stage_7_png_size,
+            embed_destroy_stage_8_png_size, embed_destroy_stage_9_png_size,
+        };
+        for (int i = 0; i < 10; ++i)
+            destroyTextures[i] = loadHUDIcon(dData[i], dSizes[i], true);
     }
 
     selectionShader = std::make_unique<Shader>("selection.vert", "selection.frag");
