@@ -131,6 +131,8 @@ int main(int argc, char* argv[])
     auto& waterSimulator = session.waterSimulator;
     auto& regionManager  = session.regionManager;
     auto& selectedBlock  = session.selectedBlock;
+    std::vector<glm::ivec2> loadOffsets;
+    int cachedLoadRadius = -1;
 
     while (!glfwWindowShouldClose(window))
     {
@@ -384,27 +386,73 @@ int main(int argc, char* argv[])
         const int UNLOAD_RADIUS = LOAD_RADIUS + 2;
         const int CHUNK_HEIGHT_MIN = 0;
         const int CHUNK_HEIGHT_MAX = (256 / CHUNK_SIZE) - 1;
-
-        if (currentState == GameState::Playing)
+        if (cachedLoadRadius != LOAD_RADIUS)
         {
+          loadOffsets.clear();
           for (int dx = -LOAD_RADIUS; dx <= LOAD_RADIUS; dx++)
           {
             for (int dz = -LOAD_RADIUS; dz <= LOAD_RADIUS; dz++)
             {
-              for (int cy = CHUNK_HEIGHT_MIN; cy <= CHUNK_HEIGHT_MAX; cy++)
+              loadOffsets.push_back({dx, dz});
+            }
+          }
+          std::sort(loadOffsets.begin(), loadOffsets.end(),
+              [](const glm::ivec2& a, const glm::ivec2& b)
               {
-                int chunkX = cx + dx;
-                int chunkZ = cz + dz;
+                int da = a.x * a.x + a.y * a.y;
+                int db = b.x * b.x + b.y * b.y;
+                return da < db;
+              });
+          cachedLoadRadius = LOAD_RADIUS;
+        }
+        size_t pendingJobs = jobSystem ? jobSystem->pendingJobCount() : 0;
+        int maxLoadEnqueuePerFrame = 32;
+        int maxMeshEnqueuePerFrame = 16;
+        if (pendingJobs > 200)
+        {
+          maxLoadEnqueuePerFrame = 4;
+          maxMeshEnqueuePerFrame = 0;
+        }
+        else if (pendingJobs > 140)
+        {
+          maxLoadEnqueuePerFrame = 8;
+          maxMeshEnqueuePerFrame = 2;
+        }
+        else if (pendingJobs > 90)
+        {
+          maxLoadEnqueuePerFrame = 12;
+          maxMeshEnqueuePerFrame = 4;
+        }
+        else if (pendingJobs > 50)
+        {
+          maxLoadEnqueuePerFrame = 20;
+          maxMeshEnqueuePerFrame = 8;
+        }
 
-                if (!chunkManager->hasChunk(chunkX, cy, chunkZ) &&
-                    !chunkManager->isLoading(chunkX, cy, chunkZ) &&
-                    !chunkManager->isSaving(chunkX, cy, chunkZ))
+        if (currentState == GameState::Playing)
+        {
+          int enqueuedLoads = 0;
+          for (const glm::ivec2& offset : loadOffsets)
+          {
+            if (useAsyncLoading && enqueuedLoads >= maxLoadEnqueuePerFrame)
+              break;
+            int chunkX = cx + offset.x;
+            int chunkZ = cz + offset.y;
+            for (int cy = CHUNK_HEIGHT_MIN; cy <= CHUNK_HEIGHT_MAX; cy++)
+            {
+              if (useAsyncLoading && enqueuedLoads >= maxLoadEnqueuePerFrame)
+                break;
+              if (!chunkManager->hasChunk(chunkX, cy, chunkZ) &&
+                  !chunkManager->isLoading(chunkX, cy, chunkZ) &&
+                  !chunkManager->isSaving(chunkX, cy, chunkZ))
+              {
+                if (useAsyncLoading)
                 {
-                  if (useAsyncLoading)
-                    chunkManager->enqueueLoadChunk(chunkX, cy, chunkZ);
-                  else
-                    chunkManager->loadChunk(chunkX, cy, chunkZ);
+                  chunkManager->enqueueLoadChunk(chunkX, cy, chunkZ);
+                  enqueuedLoads++;
                 }
+                else
+                  chunkManager->loadChunk(chunkX, cy, chunkZ);
               }
             }
           }
@@ -430,6 +478,8 @@ int main(int argc, char* argv[])
           }
         }
 
+        std::vector<std::pair<int, Chunk*>> meshCandidates;
+        meshCandidates.reserve(chunkManager->chunks.size());
         for (auto& pair : chunkManager->chunks)
         {
           Chunk* chunk = pair.second.get();
@@ -456,14 +506,33 @@ int main(int argc, char* argv[])
 
             if (neighborsReady)
             {
-              if (useAsyncLoading)
-                chunkManager->enqueueMeshChunk(chunk->position.x, chunk->position.y, chunk->position.z);
-              else
-              {
-                buildChunkMesh(*chunk, *chunkManager);
-                chunk->dirtyMesh = false;
-              }
+              int dx = chunk->position.x - cx;
+              int dz = chunk->position.z - cz;
+              int dist2 = dx * dx + dz * dz;
+              meshCandidates.push_back({dist2, chunk});
             }
+          }
+        }
+        std::sort(meshCandidates.begin(), meshCandidates.end(),
+            [](const std::pair<int, Chunk*>& a, const std::pair<int, Chunk*>& b)
+            {
+              return a.first < b.first;
+            });
+        int enqueuedMeshes = 0;
+        for (const auto& candidate : meshCandidates)
+        {
+          Chunk* chunk = candidate.second;
+          if (useAsyncLoading)
+          {
+            if (enqueuedMeshes >= maxMeshEnqueuePerFrame)
+              break;
+            chunkManager->enqueueMeshChunk(chunk->position.x, chunk->position.y, chunk->position.z);
+            enqueuedMeshes++;
+          }
+          else
+          {
+            buildChunkMesh(*chunk, *chunkManager);
+            chunk->dirtyMesh = false;
           }
         }
 

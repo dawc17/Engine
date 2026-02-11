@@ -83,6 +83,8 @@ void drawDebugUI(
             ImGui::Text("Chunks loading: %zu", chunkManager->loadingChunks.size());
             ImGui::Text("Chunks meshing: %zu", chunkManager->meshingChunks.size());
             ImGui::Text("Jobs pending: %zu", jobSystem->pendingJobCount());
+            ImGui::Text("Frustum solid  tested:%d  culled:%d  drawn:%d", frustumSolidTested, frustumSolidCulled, frustumSolidDrawn);
+            ImGui::Text("Frustum water  tested:%d  culled:%d  drawn:%d", frustumWaterTested, frustumWaterCulled, frustumWaterDrawn);
 
             ImGui::EndTabItem();
         }

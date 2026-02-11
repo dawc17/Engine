@@ -27,6 +27,7 @@ set(SOURCES
     ui/HUD.cpp
     core/WorldSession.cpp
     core/Renderer.cpp
+    rendering/Frustum.cpp
 )
 
 add_executable(VoxelEngine ${SOURCES})

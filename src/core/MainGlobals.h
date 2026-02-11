@@ -64,6 +64,12 @@ extern bool enableWaterSimulation;
 extern int waterTickRate;
 extern float waterTickAccumulator;
 extern const float WATER_TICK_INTERVAL;
+extern int frustumSolidTested;
+extern int frustumSolidCulled;
+extern int frustumSolidDrawn;
+extern int frustumWaterTested;
+extern int frustumWaterCulled;
+extern int frustumWaterDrawn;
 
 extern Player* g_player;
 extern ChunkManager* g_chunkManager;

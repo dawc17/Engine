@@ -6,8 +6,10 @@
 #include "../rendering/Meshing.h"
 #include "../rendering/ItemModelGenerator.h"
 #include "../rendering/ToolModelGenerator.h"
+#include "../rendering/Frustum.h"
 #include "../thirdparty/stb_image.h"
 #include "../world/Chunk.h"
+#include "glm/ext/matrix_transform.hpp"
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <iostream>
@@ -229,6 +231,13 @@ void Renderer::cleanup()
 
 void Renderer::beginFrame(const FrameParams& fp)
 {
+    frustumSolidTested = 0;
+    frustumSolidCulled = 0;
+    frustumSolidDrawn = 0;
+    frustumWaterTested = 0;
+    frustumWaterCulled = 0;
+    frustumWaterDrawn = 0;
+
     shaderProgram->Activate();
     glBindTexture(GL_TEXTURE_2D_ARRAY, textureArray);
 
@@ -251,22 +260,39 @@ void Renderer::beginFrame(const FrameParams& fp)
 
 void Renderer::renderChunks(const FrameParams& fp, ChunkManager& cm)
 {
+    const glm::mat4 viewProj = fp.proj * fp.view;
+    const Frustum frustum = Frustum::fromMatrix(viewProj);
+    const float chunkSizeF = static_cast<float>(CHUNK_SIZE);
+
     for (auto& pair : cm.chunks)
     {
         Chunk* chunk = pair.second.get();
-        if (chunk->indexCount > 0)
-        {
-            glm::mat4 chunkModel = glm::translate(glm::mat4(1.0f),
-                glm::vec3(chunk->position.x * CHUNK_SIZE,
-                           chunk->position.y * CHUNK_SIZE,
-                           chunk->position.z * CHUNK_SIZE));
-            glm::mat4 chunkMVP = fp.proj * fp.view * chunkModel;
-            glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(chunkMVP));
-            glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(chunkModel));
+        if (chunk->indexCount == 0)
+            continue;
+        frustumSolidTested++;
 
-            glBindVertexArray(chunk->vao);
-            glDrawElements(GL_TRIANGLES, chunk->indexCount, GL_UNSIGNED_INT, 0);
+        const glm::vec3 chunkMin = glm::vec3(chunk->position) * chunkSizeF;
+        const glm::vec3 chunkMax = chunkMin + glm::vec3(chunkSizeF);
+
+        if (!frustum.intersectsAABB(chunkMin, chunkMax))
+        {
+            frustumSolidCulled++;
+            continue;
         }
+
+        glm::mat4 chunkModel = glm::translate(
+            glm::mat4(1.0f),
+            glm::vec3(chunk->position.x * CHUNK_SIZE,
+                      chunk->position.y * CHUNK_SIZE,
+                      chunk->position.z * CHUNK_SIZE));
+        glm::mat4 chunkMVP = viewProj * chunkModel;
+
+        glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(chunkMVP));
+        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(chunkModel));
+
+        glBindVertexArray(chunk->vao);
+        glDrawElements(GL_TRIANGLES, chunk->indexCount, GL_UNSIGNED_INT, 0);
+        frustumSolidDrawn++;
     }
 }
 
@@ -288,22 +314,39 @@ void Renderer::renderWater(const FrameParams& fp, ChunkManager& cm)
     glUniform1f(waterAmbientLightLoc, fp.ambientLight);
     glUniform1i(waterEnableCausticsLoc, enableCaustics ? 1 : 0);
 
+    const glm::mat4 viewProj = fp.proj * fp.view;
+    const Frustum frustum = Frustum::fromMatrix(viewProj);
+    const float chunkSizeF = static_cast<float>(CHUNK_SIZE);
+
     for (auto& pair : cm.chunks)
     {
         Chunk* chunk = pair.second.get();
-        if (chunk->waterIndexCount > 0)
-        {
-            glm::mat4 chunkModel = glm::translate(glm::mat4(1.0f),
-                glm::vec3(chunk->position.x * CHUNK_SIZE,
-                           chunk->position.y * CHUNK_SIZE,
-                           chunk->position.z * CHUNK_SIZE));
-            glm::mat4 chunkMVP = fp.proj * fp.view * chunkModel;
-            glUniformMatrix4fv(waterTransformLoc, 1, GL_FALSE, glm::value_ptr(chunkMVP));
-            glUniformMatrix4fv(waterModelLoc, 1, GL_FALSE, glm::value_ptr(chunkModel));
+        if (chunk->waterIndexCount == 0)
+            continue;
+        frustumWaterTested++;
 
-            glBindVertexArray(chunk->waterVao);
-            glDrawElements(GL_TRIANGLES, chunk->waterIndexCount, GL_UNSIGNED_INT, 0);
+        const glm::vec3 chunkMin = glm::vec3(chunk->position) * chunkSizeF;
+        const glm::vec3 chunkMax = chunkMin + glm::vec3(chunkSizeF);
+
+        if (!frustum.intersectsAABB(chunkMin, chunkMax))
+        {
+            frustumWaterCulled++;
+            continue;
         }
+
+        glm::mat4 chunkModel = glm::translate(
+            glm::mat4(1.0f),
+            glm::vec3(chunk->position.x * CHUNK_SIZE,
+                      chunk->position.y * CHUNK_SIZE,
+                      chunk->position.z * CHUNK_SIZE));
+        glm::mat4 chunkMVP = viewProj * chunkModel;
+
+        glUniformMatrix4fv(waterTransformLoc, 1, GL_FALSE, glm::value_ptr(chunkMVP));
+        glUniformMatrix4fv(waterModelLoc, 1, GL_FALSE, glm::value_ptr(chunkModel));
+
+        glBindVertexArray(chunk->waterVao);
+        glDrawElements(GL_TRIANGLES, chunk->waterIndexCount, GL_UNSIGNED_INT, 0);
+        frustumWaterDrawn++;
     }
 
     glDepthMask(GL_TRUE);

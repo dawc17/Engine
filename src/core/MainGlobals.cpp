@@ -74,6 +74,12 @@ bool enableWaterSimulation = true;
 int waterTickRate = 5;
 float waterTickAccumulator = 0.0f;
 const float WATER_TICK_INTERVAL = 0.05f;
+int frustumSolidTested = 0;
+int frustumSolidCulled = 0;
+int frustumSolidDrawn = 0;
+int frustumWaterTested = 0;
+int frustumWaterCulled = 0;
+int frustumWaterDrawn = 0;
 
 Player* g_player = nullptr;
 ChunkManager* g_chunkManager = nullptr;
