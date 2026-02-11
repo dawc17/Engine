@@ -11,9 +11,11 @@ one day a few years ago i had this very specific itch that i never quite got to 
 - **procedural terrain**: fbm‑style terrain with stone/dirt/grass/sand strata, sea level water fill, and tree decorator.
 - **procedural caves**: minecraft‑inspired caves (cheese + spaghetti) carved underground.
 - **greedy meshing**: merges adjacent faces with the same texture to reduce draw calls.
-- **texture array atlas**: `blocks.png` split into 1024 tiles (32×32) with mipmaps + anisotropic filtering.
+- **texture array pipeline**: block textures are loaded from individual files in `assets/textures/` into a `GL_TEXTURE_2D_ARRAY` with mipmaps + anisotropic filtering.
+- **biome tinting**: grass/leaves tint is applied dynamically in shaders, with per-pixel masking so only the intended parts are tinted.
 - **water system**: source + flowing levels with edge search, falling water, and optional caustics.
 - **particles**: instanced quads for block break particles.
+- **item icons**: inventory block icons are rendered from 3D block models (offscreen) instead of static images.
 - **survival system**: health + hunger bars, fall damage, drowning, regen, and respawn.
 - **player controller**: aabb collision, gravity, jumping, noclip.
 - **block interaction**: raycast selection with wireframe highlight, lmb break / rmb place.
@@ -101,7 +103,6 @@ the imgui debug window provides:
 - day/night controls (auto time, time of day, day length, fog density)
 - water controls (simulation tick rate, caustics)
 - fun modes (drunk / disco / earthquake)
-- block texture randomizer/reset
 
 ## troubleshooting
 
