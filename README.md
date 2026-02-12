@@ -11,7 +11,6 @@ one day a few years ago i had this very specific itch that i never quite got to 
 - **procedural terrain**: fbm‑style terrain with stone/dirt/grass/sand strata, sea level water fill, and tree decorator.
 - **procedural caves**: minecraft‑inspired caves (cheese + spaghetti) carved underground.
 - **greedy meshing**: merges adjacent faces with the same texture to reduce draw calls.
-- **texture array pipeline**: block textures are loaded from individual files in `assets/textures/` into a `GL_TEXTURE_2D_ARRAY` with mipmaps + anisotropic filtering.
 - **biome tinting**: grass/leaves tint is applied dynamically in shaders, with per-pixel masking so only the intended parts are tinted.
 - **water system**: source + flowing levels with edge search, falling water, and optional caustics.
 - **particles**: instanced quads for block break particles.
@@ -20,6 +19,7 @@ one day a few years ago i had this very specific itch that i never quite got to 
 - **player controller**: aabb collision, gravity, jumping, noclip.
 - **block interaction**: raycast selection with wireframe highlight, lmb break / rmb place.
 - **day/night cycle**: dynamic sky, fog, and ambient lighting.
+- **embedded assets**: textures and shaders are embedded into the executable via cmake.
 
 ## prerequisites
 
