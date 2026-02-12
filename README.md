@@ -2,6 +2,7 @@
 
 ![Hackatime Badge](https://hackatime-badge.hackclub.com/U0A759TPU76/VoxelEngine)
 ![Cpp Badge](https://img.shields.io/badge/C%2B%2B-00599C?style=flat&logo=c%2B%2B&logoColor=white)
+![Release badge](https://img.shields.io/github/v/release/dawc17/VoxelEngine)
 
 welcome to my small minecraft clone (maybe something more in the future) made in C++ with OpenGL!
 
