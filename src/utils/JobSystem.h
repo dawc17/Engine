@@ -2,14 +2,16 @@
 #include "../world/Chunk.h"
 #include "../rendering/Meshing.h"
 #include "../world/RegionManager.h"
-#include <atomic>
-#include <condition_variable>
 #include <functional>
 #include <memory>
-#include <mutex>
 #include <queue>
-#include <thread>
 #include <vector>
+#ifndef __EMSCRIPTEN__
+#include <atomic>
+#include <condition_variable>
+#include <mutex>
+#include <thread>
+#endif
 
 enum class JobType
 {
@@ -109,22 +111,28 @@ public:
     size_t pendingJobCount() const;
 
 private:
+#ifndef __EMSCRIPTEN__
     std::vector<std::thread> workers;
-    std::queue<std::unique_ptr<Job>> jobQueue;
-    std::queue<std::unique_ptr<Job>> highPriorityQueue;
     std::mutex queueMutex;
     std::condition_variable condition;
     std::atomic<bool> running;
+    std::mutex completedMutex;
+#else
+    bool running = false;
+#endif
+    std::queue<std::unique_ptr<Job>> jobQueue;
+    std::queue<std::unique_ptr<Job>> highPriorityQueue;
 
     std::vector<std::unique_ptr<GenerateChunkJob>> completedGenerations;
     std::vector<std::unique_ptr<MeshChunkJob>> completedMeshes;
     std::vector<std::unique_ptr<SaveChunkJob>> completedSaves;
-    std::mutex completedMutex;
 
     RegionManager* regionManager;
     ChunkManager* chunkManager;
 
+#ifndef __EMSCRIPTEN__
     void workerLoop();
+#endif
     void processJob(std::unique_ptr<Job> job);
     void processGenerateJob(GenerateChunkJob* job);
     void processMeshJob(MeshChunkJob* job);

@@ -31,8 +31,13 @@ using FrameClock = std::chrono::high_resolution_clock;
 using FrameDuration = std::chrono::duration<double>;
 static FrameClock::time_point lastFrameTime = FrameClock::now();
 
+#ifdef __EMSCRIPTEN__
+const int SCREEN_WIDTH = 960;
+const int SCREEN_HEIGHT = 540;
+#else
 const int SCREEN_WIDTH = 1920;
 const int SCREEN_HEIGHT = 1080;
+#endif
 const float MAX_RAYCAST_DISTANCE = 8.0f;
 
 float fps = 0.0f;

@@ -10,6 +10,55 @@ JobSystem::JobSystem()
 {
 }
 
+#ifdef __EMSCRIPTEN__
+// ---- Synchronous (single-threaded) implementation for Emscripten ----
+
+JobSystem::~JobSystem() { stop(); }
+
+void JobSystem::start(int /*numWorkers*/) { running = true; }
+void JobSystem::stop() { running = false; }
+
+void JobSystem::enqueue(std::unique_ptr<Job> job)
+{
+    processJob(std::move(job));
+}
+
+void JobSystem::enqueueHighPriority(std::unique_ptr<Job> job)
+{
+    processJob(std::move(job));
+}
+
+std::vector<std::unique_ptr<GenerateChunkJob>> JobSystem::pollCompletedGenerations()
+{
+    std::vector<std::unique_ptr<GenerateChunkJob>> result;
+    result.swap(completedGenerations);
+    return result;
+}
+
+std::vector<std::unique_ptr<MeshChunkJob>> JobSystem::pollCompletedMeshes()
+{
+    std::vector<std::unique_ptr<MeshChunkJob>> result;
+    result.swap(completedMeshes);
+    return result;
+}
+
+std::vector<std::unique_ptr<SaveChunkJob>> JobSystem::pollCompletedSaves()
+{
+    std::vector<std::unique_ptr<SaveChunkJob>> result;
+    result.swap(completedSaves);
+    return result;
+}
+
+bool JobSystem::hasCompletedWork() const
+{
+    return !completedGenerations.empty() || !completedMeshes.empty() || !completedSaves.empty();
+}
+
+size_t JobSystem::pendingJobCount() const { return 0; }
+
+#else
+// ---- Multi-threaded implementation ----
+
 JobSystem::~JobSystem()
 {
     stop();
@@ -136,6 +185,8 @@ void JobSystem::workerLoop()
     }
 }
 
+#endif // !__EMSCRIPTEN__ (multi-threaded impl)
+
 void JobSystem::processJob(std::unique_ptr<Job> job)
 {
     switch (job->type)
@@ -143,7 +194,9 @@ void JobSystem::processJob(std::unique_ptr<Job> job)
         case JobType::Generate:
             processGenerateJob(static_cast<GenerateChunkJob*>(job.get()));
             {
+#ifndef __EMSCRIPTEN__
                 std::lock_guard<std::mutex> lock(completedMutex);
+#endif
                 completedGenerations.push_back(
                     std::unique_ptr<GenerateChunkJob>(static_cast<GenerateChunkJob*>(job.release()))
                 );
@@ -153,7 +206,9 @@ void JobSystem::processJob(std::unique_ptr<Job> job)
         case JobType::Mesh:
             processMeshJob(static_cast<MeshChunkJob*>(job.get()));
             {
+#ifndef __EMSCRIPTEN__
                 std::lock_guard<std::mutex> lock(completedMutex);
+#endif
                 completedMeshes.push_back(
                     std::unique_ptr<MeshChunkJob>(static_cast<MeshChunkJob*>(job.release()))
                 );
@@ -163,7 +218,9 @@ void JobSystem::processJob(std::unique_ptr<Job> job)
         case JobType::Save:
             processSaveJob(static_cast<SaveChunkJob*>(job.get()));
             {
+#ifndef __EMSCRIPTEN__
                 std::lock_guard<std::mutex> lock(completedMutex);
+#endif
                 completedSaves.push_back(
                     std::unique_ptr<SaveChunkJob>(static_cast<SaveChunkJob*>(job.release()))
                 );
