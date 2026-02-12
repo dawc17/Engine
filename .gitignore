@@ -71,3 +71,5 @@ imgui.ini
 *.zip
 *.gz
 EmscriptenPlan.md
+/build-web
+/emsdk-main
