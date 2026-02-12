@@ -70,3 +70,6 @@ imgui.ini
 /VoxelEngine-Linux
 *.zip
 *.gz
+/build-web
+/emsdk-main
+EmscriptenPlan.md
