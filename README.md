@@ -1,5 +1,8 @@
 # daw's Voxel Engine
 
+![Hackatime Badge](https://hackatime-badge.hackclub.com/U0A759TPU76/VoxelEngine)
+![Cpp Badge](https://img.shields.io/badge/C%2B%2B-00599C?style=flat&logo=c%2B%2B&logoColor=white)
+
 welcome to my small minecraft clone (maybe something more in the future) made in C++ with OpenGL!
 
 one day a few years ago i had this very specific itch that i never quite got to scratching, so recently i decided it was finally time. this is the result!
