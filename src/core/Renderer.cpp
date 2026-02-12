@@ -41,9 +41,11 @@ void Renderer::init()
     glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
+#ifndef __EMSCRIPTEN__
     GLfloat maxAnisotropy = 0.0f;
     glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &maxAnisotropy);
     glTexParameterf(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAX_ANISOTROPY, maxAnisotropy);
+#endif
 
     constexpr int TILE_SIZE = 16;
     constexpr int NUM_LAYERS = TEX_COUNT;
@@ -308,10 +310,12 @@ void Renderer::beginFrame(const FrameParams& fp)
     shaderProgram->Activate();
     glBindTexture(GL_TEXTURE_2D_ARRAY, textureArray);
 
+#ifndef __EMSCRIPTEN__
     if (wireframeMode)
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     else
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+#endif
 
     glm::mat4 model(1.0f);
     glm::mat4 mvp = fp.proj * fp.view * model;
@@ -431,10 +435,14 @@ void Renderer::renderSelectionBox(const FrameParams& fp, const std::optional<Ray
     if (!sel.has_value())
         return;
 
+#ifndef __EMSCRIPTEN__
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+#endif
     glLineWidth(2.0f);
+#ifndef __EMSCRIPTEN__
     glEnable(GL_POLYGON_OFFSET_LINE);
     glPolygonOffset(-1.0f, -1.0f);
+#endif
 
     selectionShader->Activate();
     glm::mat4 selectionModel = glm::translate(glm::mat4(1.0f),
@@ -446,13 +454,17 @@ void Renderer::renderSelectionBox(const FrameParams& fp, const std::optional<Ray
     glBindVertexArray(selectionVAO);
     glDrawElements(GL_LINES, 24, GL_UNSIGNED_INT, 0);
 
+#ifndef __EMSCRIPTEN__
     glDisable(GL_POLYGON_OFFSET_LINE);
+#endif
     glLineWidth(1.0f);
 
+#ifndef __EMSCRIPTEN__
     if (wireframeMode)
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     else
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+#endif
 }
 
 void Renderer::renderDestroyOverlay(const FrameParams& fp, const Player& player,
@@ -549,10 +561,12 @@ void Renderer::renderHeldItem(const FrameParams& fp, const Player& player)
             return;
 
         glClear(GL_DEPTH_BUFFER_BIT);
+#ifndef __EMSCRIPTEN__
         if (wireframeMode)
             glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
         else
             glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+#endif
 
         toolModelShader->Activate();
         glUniform1f(toolTimeOfDayLoc, fp.sunBrightness);
@@ -591,10 +605,12 @@ void Renderer::renderHeldItem(const FrameParams& fp, const Player& player)
             return;
 
         glClear(GL_DEPTH_BUFFER_BIT);
+#ifndef __EMSCRIPTEN__
         if (wireframeMode)
             glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
         else
             glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+#endif
 
         itemModelShader->Activate();
         glActiveTexture(GL_TEXTURE0);

@@ -5,7 +5,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include <glad/glad.h>
+#include "../rendering/opengl/GLCompat.h"
 #include <GLFW/glfw3.h>
 
 #include "../gameplay/Player.h"

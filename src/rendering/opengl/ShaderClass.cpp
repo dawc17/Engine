@@ -1,6 +1,7 @@
 #include"ShaderClass.h"
 #include "embedded_assets.h"
 #include <cstring>
+#include <string>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -17,6 +18,8 @@ std::filesystem::path getExecutableDir()
 	wchar_t path[MAX_PATH];
 	GetModuleFileNameW(NULL, path, MAX_PATH);
 	return fs::path(path).parent_path();
+#elif defined(__EMSCRIPTEN__)
+	return fs::current_path();
 #else
 	char path[PATH_MAX];
 	ssize_t len = readlink("/proc/self/exe", path, sizeof(path) - 1);
@@ -27,6 +30,47 @@ std::filesystem::path getExecutableDir()
 	}
 	return fs::current_path();
 #endif
+}
+
+static std::string adaptShaderForCurrentGL(std::string source, bool isFragment)
+{
+#ifdef __EMSCRIPTEN__
+	const std::string oldVersion = "#version 460 core";
+	const std::string newVersion = "#version 300 es";
+
+	if (source.rfind(oldVersion, 0) == 0)
+		source.replace(0, oldVersion.size(), newVersion);
+
+	if (isFragment)
+	{
+		std::string precisionBlock;
+		if (source.find("precision mediump float;") == std::string::npos &&
+			source.find("precision highp float;") == std::string::npos)
+			precisionBlock += "precision highp float;\n";
+		if (source.find("sampler2DArray") != std::string::npos &&
+			source.find("precision highp sampler2DArray;") == std::string::npos &&
+			source.find("precision mediump sampler2DArray;") == std::string::npos)
+			precisionBlock += "precision highp sampler2DArray;\n";
+		if (source.find("sampler2D") != std::string::npos &&
+			source.find("sampler2DArray") == std::string::npos &&
+			source.find("precision highp sampler2D;") == std::string::npos &&
+			source.find("precision mediump sampler2D;") == std::string::npos)
+			precisionBlock += "precision highp sampler2D;\n";
+
+		if (!precisionBlock.empty())
+		{
+			auto lineEnd = source.find('\n');
+			if (lineEnd != std::string::npos)
+				source.insert(lineEnd + 1, precisionBlock);
+			else
+				source = newVersion + "\n" + precisionBlock;
+		}
+	}
+#else
+	(void)isFragment;
+#endif
+
+	return source;
 }
 
 std::string get_file_contents(const char* filename)
@@ -60,8 +104,8 @@ std::string get_file_contents(const char* filename)
 
 Shader::Shader(const char* vertexFile, const char* fragmentFile)
 {
-	std::string vertexCode = get_file_contents(vertexFile);
-	std::string fragmentCode = get_file_contents(fragmentFile);
+	std::string vertexCode = adaptShaderForCurrentGL(get_file_contents(vertexFile), false);
+	std::string fragmentCode = adaptShaderForCurrentGL(get_file_contents(fragmentFile), true);
 
 	const char* vertexSource = vertexCode.c_str();
 	const char* fragmentSource = fragmentCode.c_str();

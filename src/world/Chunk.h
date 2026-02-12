@@ -1,7 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <glm/glm.hpp>
-#include <glad/glad.h>
+#include "../rendering/opengl/GLCompat.h"
 
 using BlockID = uint8_t;
 constexpr int CHUNK_SIZE = 16;

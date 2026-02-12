@@ -38,7 +38,7 @@
 #include "../ui/DebugUI.h"
 #include "../ui/HUD.h"
 
-#include <glad/glad.h>
+#include "../rendering/opengl/GLCompat.h"
 #include <GLFW/glfw3.h>
 #include <algorithm>
 #include <cstdlib>
@@ -49,6 +49,10 @@
 #include <string>
 #include <vector>
 #include <thread>
+
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 
 
 int main(int argc, char* argv[])
@@ -69,9 +73,15 @@ int main(int argc, char* argv[])
     }
 
     glfwInit();
+  #ifdef __EMSCRIPTEN__
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
+  #else
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+  #endif
 
     glfwWindowHint(GLFW_MAXIMIZED, GLFW_TRUE);
     GLFWwindow *window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT,
@@ -85,7 +95,9 @@ int main(int argc, char* argv[])
     glfwMakeContextCurrent(window);
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 
+  #ifndef __EMSCRIPTEN__
     gladLoadGL();
+  #endif
     glfwSwapInterval(0);
 
     glEnable(GL_DEPTH_TEST);
@@ -108,7 +120,11 @@ int main(int argc, char* argv[])
     glfwSetScrollCallback(window, scrollCallback);
     
     ImGui_ImplGlfw_InitForOpenGL(window, true);
+  #ifdef __EMSCRIPTEN__
+    ImGui_ImplOpenGL3_Init("#version 300 es");
+  #else
     ImGui_ImplOpenGL3_Init("#version 460");
+  #endif
 
     bool useAsyncLoading = true;
 
@@ -711,6 +727,10 @@ int main(int argc, char* argv[])
         limitFPS(targetFps);
 
       glfwPollEvents();
+
+#ifdef __EMSCRIPTEN__
+      emscripten_sleep(0);
+#endif
     }
 
     session.shutdown(player, window);

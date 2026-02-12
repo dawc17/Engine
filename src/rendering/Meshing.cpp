@@ -3,7 +3,7 @@
 #include "../world/ChunkManager.h"
 #include "../world/TerrainGenerator.h"
 #include "../world/WaterSimulator.h"
-#include <glad/glad.h>
+#include "opengl/GLCompat.h"
 #include <cstddef>
 #include <queue>
 #include <cmath>

@@ -1,5 +1,5 @@
 #pragma once
-#include <glad/glad.h>
+#include "opengl/GLCompat.h"
 #include <glm/glm.hpp>
 #include <string>
 #include <vector>

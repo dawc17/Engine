@@ -1,6 +1,6 @@
 #pragma once
 
-#include <glad/glad.h>
+#include "../rendering/opengl/GLCompat.h"
 #include <glm/glm.hpp>
 #include <memory>
 #include <optional>

@@ -31,6 +31,10 @@ set(SOURCES
     rendering/Frustum.cpp
 )
 
+if (EMSCRIPTEN)
+    set(CMAKE_EXECUTABLE_SUFFIX ".html")
+endif()
+
 include(${CMAKE_SOURCE_DIR}/cmake/embed_resources.cmake)
 
 set(_EMBED_H "#pragma once\n\n")
@@ -103,19 +107,25 @@ target_include_directories(VoxelEngine PRIVATE
 
 # === ZLIB ===
 include(FetchContent)
-FetchContent_Declare(
-    zlib
-    GIT_REPOSITORY https://github.com/madler/zlib.git
-    GIT_TAG v1.3.1
-)
-set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(zlib)
-target_include_directories(VoxelEngine PRIVATE ${zlib_SOURCE_DIR} ${zlib_BINARY_DIR})
+if (NOT EMSCRIPTEN)
+    FetchContent_Declare(
+        zlib
+        GIT_REPOSITORY https://github.com/madler/zlib.git
+        GIT_TAG v1.3.1
+    )
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+    set(ZLIB_BUILD_SHARED OFF CACHE BOOL "" FORCE)
+    set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(zlib)
+    target_include_directories(VoxelEngine PRIVATE ${zlib_SOURCE_DIR} ${zlib_BINARY_DIR})
+endif()
 
 # === GLAD ===
-set(GLAD_DIR ../libs/glad)
-add_library(glad ${GLAD_DIR}/src/glad.c)
-target_include_directories(glad PUBLIC ${GLAD_DIR}/include)
+if (NOT EMSCRIPTEN)
+    set(GLAD_DIR ../libs/glad)
+    add_library(glad ${GLAD_DIR}/src/glad.c)
+    target_include_directories(glad PUBLIC ${GLAD_DIR}/include)
+endif()
 
 # === IMGUI ===
 set(IMGUI_DIR ../libs/imgui)
@@ -138,22 +148,29 @@ target_include_directories(imgui PUBLIC
 
 # === Include dirs for your executable ===
 target_include_directories(VoxelEngine PUBLIC
-    ../libs/glad/include
     ${IMGUI_DIR}
     ${IMGUI_DIR}/backends
 )
 
+if (NOT EMSCRIPTEN)
+    target_include_directories(VoxelEngine PUBLIC ../libs/glad/include)
+endif()
+
 target_include_directories(VoxelEngine PRIVATE "${CMAKE_BINARY_DIR}/generated")
 
 # === GLFW & OpenGL ===
-if (WIN32)
+if (EMSCRIPTEN)
+    set(GLFW_FETCH_DEFAULT OFF)
+elseif (WIN32)
     set(GLFW_FETCH_DEFAULT ON)
 else()
     set(GLFW_FETCH_DEFAULT OFF)
 endif()
 option(GLFW_FETCH "Fetch/build GLFW locally instead of requiring a system package" ${GLFW_FETCH_DEFAULT})
 
-if (GLFW_FETCH)
+if (EMSCRIPTEN)
+    set(GLFW_TARGET "")
+elseif (GLFW_FETCH)
     include(FetchContent)
     FetchContent_Declare(
         glfw
@@ -181,7 +198,26 @@ endif()
 
 target_link_libraries(VoxelEngine PRIVATE glm::glm)
 
-if (WIN32)
+if (EMSCRIPTEN)
+    target_compile_definitions(imgui PRIVATE IMGUI_IMPL_OPENGL_ES3)
+    target_compile_definitions(VoxelEngine PRIVATE IMGUI_IMPL_OPENGL_ES3)
+
+    target_link_libraries(VoxelEngine PRIVATE imgui)
+
+    target_link_options(VoxelEngine PRIVATE
+        "-sUSE_GLFW=3"
+        "-sUSE_ZLIB=1"
+        "-sMIN_WEBGL_VERSION=2"
+        "-sMAX_WEBGL_VERSION=2"
+        "-sALLOW_MEMORY_GROWTH=1"
+        "-sWASM=1"
+        "-sASYNCIFY"
+        "-sASYNCIFY_STACK_SIZE=65536"
+        "-sFORCE_FILESYSTEM=1"
+        "-sASSERTIONS=2"
+        "-gsource-map"
+    )
+elseif (WIN32)
     target_link_libraries(VoxelEngine PRIVATE glad ${GLFW_TARGET} imgui opengl32 zlibstatic)
     target_link_libraries(imgui PRIVATE ${GLFW_TARGET})
 else()

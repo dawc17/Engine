@@ -1,5 +1,5 @@
 #pragma once
-#include "../../../libs/glad/include/glad/glad.h"
+#include "GLCompat.h"
 #include "VBO.h"
 
 class VAO

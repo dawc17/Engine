@@ -1,5 +1,5 @@
 #pragma once
-#include "../../../libs/glad/include/glad/glad.h"
+#include "GLCompat.h"
 
 class VBO
 {

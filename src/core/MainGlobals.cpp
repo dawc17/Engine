@@ -98,6 +98,10 @@ std::unordered_map<uint8_t, GLuint> g_blockIcons;
 
 void limitFPS(int targetFPS)
 {
+#ifdef __EMSCRIPTEN__
+  (void)targetFPS;
+  return;
+#else
   using namespace std::chrono;
 
   auto frameDuration = duration<double>(1.0 / targetFPS);
@@ -120,6 +124,7 @@ void limitFPS(int targetFPS)
   }
 
   lastFrameTime = FrameClock::now();
+#endif
 }
 
 GLuint loadHUDIcon(const unsigned char* pngData, unsigned int pngSize, bool useNearest)
