@@ -454,7 +454,46 @@ int main(int argc, char* argv[])
         audioEngine.update(deltaTime);
         audioEngine.updateListener(eyePos, camForward, glm::vec3(0.0f, 1.0f, 0.0f));
         audioEngine.setUnderwaterLoop(isUnderwater);
-        audioEngine.setWindLoop(!isUnderwater && currentState == GameState::Playing);
+
+        // Water ambience: scan nearby blocks for water sources
+        {
+            float waterAmbientVol = 0.0f;
+            if (!isUnderwater && currentState == GameState::Playing)
+            {
+                const int SCAN_RADIUS = 10;
+                const glm::ivec3 pBlock(
+                    static_cast<int>(std::floor(player.position.x)),
+                    static_cast<int>(std::floor(player.position.y)),
+                    static_cast<int>(std::floor(player.position.z)));
+                float closestDistSq = static_cast<float>((SCAN_RADIUS + 1) * (SCAN_RADIUS + 1));
+
+                for (int dx = -SCAN_RADIUS; dx <= SCAN_RADIUS; dx += 2)
+                {
+                    for (int dy = -SCAN_RADIUS; dy <= SCAN_RADIUS; dy += 2)
+                    {
+                        for (int dz = -SCAN_RADIUS; dz <= SCAN_RADIUS; dz += 2)
+                        {
+                            uint8_t b = getBlockAtWorld(
+                                pBlock.x + dx, pBlock.y + dy, pBlock.z + dz, *chunkManager);
+                            if (isWaterSource(b))
+                            {
+                                float dSq = static_cast<float>(dx * dx + dy * dy + dz * dz);
+                                if (dSq < closestDistSq)
+                                    closestDistSq = dSq;
+                            }
+                        }
+                    }
+                }
+
+                float maxDistSq = static_cast<float>(SCAN_RADIUS * SCAN_RADIUS);
+                if (closestDistSq <= maxDistSq)
+                {
+                    float t = 1.0f - (closestDistSq / maxDistSq);
+                    waterAmbientVol = 0.12f * t * t;  // quadratic falloff
+                }
+            }
+            audioEngine.setWaterAmbience(waterAmbientVol);
+        }
 
         renderer.beginFrame(fp);
 

@@ -20,7 +20,7 @@ class AudioEngine
         void playBlockBreak(uint8_t blockId, const glm::vec3& worldPos);
         void playBlockPlace(uint8_t blockId, const glm::vec3& worldPos);
 
-        void setWindLoop(bool active);
+        void setWaterAmbience(float volume);
         void setUnderwaterLoop(bool active);
     
     private:
