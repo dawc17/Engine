@@ -29,6 +29,8 @@ set(SOURCES
     core/WorldSession.cpp
     core/Renderer.cpp
     rendering/Frustum.cpp
+    audio/AudioEngine.cpp
+    audio/stb_vorbis_impl.c
 )
 
 include(${CMAKE_SOURCE_DIR}/cmake/embed_resources.cmake)
@@ -39,6 +41,17 @@ set(_EMBED_CPP "#include \"embedded_assets.h\"\n\n")
 set(_TEX "${CMAKE_SOURCE_DIR}/assets/textures")
 set(_SHD "${CMAKE_SOURCE_DIR}/src/shaders")
 
+# asset embedding
+
+# tools
+embed_asset(embed_diamond_pickaxe_png       "${_TEX}/tools/diamond_pickaxe.png")
+embed_asset(embed_wood_pickaxe_png       "${_TEX}/tools/wood_pickaxe.png")
+embed_asset(embed_stone_pickaxe_png       "${_TEX}/tools/stone_pickaxe.png")
+embed_asset(embed_gold_pickaxe_png       "${_TEX}/tools/gold_pickaxe.png")
+embed_asset(embed_iron_pickaxe_png       "${_TEX}/tools/iron_pickaxe.png")
+
+
+# blocks
 embed_asset(embed_dirt_png                  "${_TEX}/dirt.png")
 embed_asset(embed_grass_top_png             "${_TEX}/grass_top.png")
 embed_asset(embed_grass_side_snowed_png     "${_TEX}/grass_side_snowed.png")
@@ -56,8 +69,8 @@ embed_asset(embed_leaves_spruce_png         "${_TEX}/leaves_spruce.png")
 embed_asset(embed_planks_spruce_png         "${_TEX}/planks_spruce.png")
 embed_asset(embed_snow_png                  "${_TEX}/snow.png")
 embed_asset(embed_grass_side_overlay_png    "${_TEX}/grass_side_overlay.png")
-embed_asset(embed_diamond_pickaxe_png       "${_TEX}/tools/diamond_pickaxe.png")
 
+# misc
 embed_asset(embed_destroy_stage_0_png       "${_TEX}/destroy/destroy_stage_0.png")
 embed_asset(embed_destroy_stage_1_png       "${_TEX}/destroy/destroy_stage_1.png")
 embed_asset(embed_destroy_stage_2_png       "${_TEX}/destroy/destroy_stage_2.png")
@@ -69,6 +82,7 @@ embed_asset(embed_destroy_stage_7_png       "${_TEX}/destroy/destroy_stage_7.png
 embed_asset(embed_destroy_stage_8_png       "${_TEX}/destroy/destroy_stage_8.png")
 embed_asset(embed_destroy_stage_9_png       "${_TEX}/destroy/destroy_stage_9.png")
 
+# shaders
 embed_asset(embed_default_vert              "${_SHD}/default.vert")
 embed_asset(embed_default_frag              "${_SHD}/default.frag")
 embed_asset(embed_selection_vert            "${_SHD}/selection.vert")
@@ -182,7 +196,7 @@ endif()
 target_link_libraries(VoxelEngine PRIVATE glm::glm)
 
 if (WIN32)
-    target_link_libraries(VoxelEngine PRIVATE glad ${GLFW_TARGET} imgui opengl32 zlibstatic)
+    target_link_libraries(VoxelEngine PRIVATE glad ${GLFW_TARGET} imgui opengl32 zlibstatic ole32 avrt)
     target_link_libraries(imgui PRIVATE ${GLFW_TARGET})
 else()
     target_link_libraries(VoxelEngine PRIVATE glad ${GLFW_TARGET} GL imgui zlibstatic)

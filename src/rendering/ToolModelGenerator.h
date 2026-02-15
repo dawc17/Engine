@@ -20,7 +20,13 @@ struct ToolModel {
 };
 
 constexpr uint8_t TOOL_ID_START = 128;
+
+// pickaxes
 constexpr uint8_t TOOL_DIAMOND_PICKAXE = 128;
+constexpr uint8_t TOOL_WOOD_PICKAXE = 129;
+constexpr uint8_t TOOL_STONE_PICKAXE = 130;
+constexpr uint8_t TOOL_GOLD_PICKAXE = 131;
+constexpr uint8_t TOOL_IRON_PICKAXE = 132;
 
 inline bool isToolItem(uint8_t id) { return id >= TOOL_ID_START; }
 

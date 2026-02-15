@@ -7,6 +7,9 @@
 #include <cmath>
 
 ToolTransform g_toolTransform;
+BlockTransform g_blockTransform;
+BlockSwingTuning g_blockSwingTuning;
+BlockPlaceTuning g_blockPlaceTuning;
 
 void drawDebugUI(
     Player& player,
@@ -172,6 +175,67 @@ void drawDebugUI(
             ImGui::Text("  X:%.2f Y:%.2f Z:%.2f  rX:%.0f rY:%.0f rZ:%.0f  s:%.2f",
                 g_toolTransform.posX, g_toolTransform.posY, g_toolTransform.posZ,
                 g_toolTransform.rotX, g_toolTransform.rotY, g_toolTransform.rotZ, g_toolTransform.scale);
+
+            ImGui::Separator();
+            ImGui::Text("BLOCK POSITION");
+            ImGui::SliderFloat("Block Pos X", &g_blockTransform.posX, -1.0f, 1.0f, "%.3f");
+            ImGui::SliderFloat("Block Pos Y", &g_blockTransform.posY, -1.0f, 1.0f, "%.3f");
+            ImGui::SliderFloat("Block Pos Z", &g_blockTransform.posZ, -2.0f, 0.0f, "%.3f");
+
+            ImGui::Separator();
+            ImGui::Text("BLOCK ROTATION");
+            ImGui::SliderFloat("Block Rot X", &g_blockTransform.rotX, -180.0f, 180.0f, "%.1f");
+            ImGui::SliderFloat("Block Rot Y", &g_blockTransform.rotY, -180.0f, 180.0f, "%.1f");
+            ImGui::SliderFloat("Block Rot Z", &g_blockTransform.rotZ, -180.0f, 180.0f, "%.1f");
+
+            ImGui::Separator();
+            ImGui::SliderFloat("Block Scale", &g_blockTransform.scale, 0.05f, 2.0f, "%.3f");
+
+            ImGui::Separator();
+            if (ImGui::Button("Reset Block"))
+            {
+                g_blockTransform = BlockTransform{};
+            }
+            ImGui::SameLine();
+            ImGui::Text("  X:%.2f Y:%.2f Z:%.2f  rX:%.0f rY:%.0f rZ:%.0f  s:%.2f",
+                g_blockTransform.posX, g_blockTransform.posY, g_blockTransform.posZ,
+                g_blockTransform.rotX, g_blockTransform.rotY, g_blockTransform.rotZ, g_blockTransform.scale);
+
+            ImGui::Separator();
+            ImGui::Text("BLOCK SWING ANIMATION");
+            ImGui::SliderFloat("Block Swing Pos X", &g_blockSwingTuning.posX, -1.0f, 1.0f, "%.3f");
+            ImGui::SliderFloat("Block Swing Pos Y", &g_blockSwingTuning.posY, -1.0f, 1.0f, "%.3f");
+            ImGui::SliderFloat("Block Swing Pos Z", &g_blockSwingTuning.posZ, -1.0f, 1.0f, "%.3f");
+            ImGui::SliderFloat("Block Swing Rot X", &g_blockSwingTuning.rotX, -180.0f, 180.0f, "%.1f");
+            ImGui::SliderFloat("Block Swing Rot Z", &g_blockSwingTuning.rotZ, -180.0f, 180.0f, "%.1f");
+
+            ImGui::Separator();
+            if (ImGui::Button("Reset Block Swing"))
+            {
+                g_blockSwingTuning = BlockSwingTuning{};
+            }
+            ImGui::SameLine();
+            ImGui::Text("  dX:%.2f dY:%.2f dZ:%.2f  dRX:%.0f dRZ:%.0f",
+                g_blockSwingTuning.posX, g_blockSwingTuning.posY, g_blockSwingTuning.posZ,
+                g_blockSwingTuning.rotX, g_blockSwingTuning.rotZ);
+
+            ImGui::Separator();
+            ImGui::Text("BLOCK PLACE ANIMATION");
+            ImGui::SliderFloat("Block Place Pos X", &g_blockPlaceTuning.posX, -1.0f, 1.0f, "%.3f");
+            ImGui::SliderFloat("Block Place Pos Y", &g_blockPlaceTuning.posY, -1.0f, 1.0f, "%.3f");
+            ImGui::SliderFloat("Block Place Pos Z", &g_blockPlaceTuning.posZ, -1.0f, 1.0f, "%.3f");
+            ImGui::SliderFloat("Block Place Rot X", &g_blockPlaceTuning.rotX, -180.0f, 180.0f, "%.1f");
+            ImGui::SliderFloat("Block Place Rot Z", &g_blockPlaceTuning.rotZ, -180.0f, 180.0f, "%.1f");
+
+            ImGui::Separator();
+            if (ImGui::Button("Reset Block Place"))
+            {
+                g_blockPlaceTuning = BlockPlaceTuning{};
+            }
+            ImGui::SameLine();
+            ImGui::Text("  dX:%.2f dY:%.2f dZ:%.2f  dRX:%.0f dRZ:%.0f",
+                g_blockPlaceTuning.posX, g_blockPlaceTuning.posY, g_blockPlaceTuning.posZ,
+                g_blockPlaceTuning.rotX, g_blockPlaceTuning.rotZ);
 
             ImGui::EndTabItem();
         }

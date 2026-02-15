@@ -184,6 +184,10 @@ void loadToolModels()
 
     ToolDef tools[] = {
         {TOOL_DIAMOND_PICKAXE, embed_diamond_pickaxe_png_data, embed_diamond_pickaxe_png_size},
+        {TOOL_WOOD_PICKAXE, embed_wood_pickaxe_png_data, embed_wood_pickaxe_png_size},
+        {TOOL_STONE_PICKAXE, embed_stone_pickaxe_png_data, embed_stone_pickaxe_png_size},
+        {TOOL_GOLD_PICKAXE, embed_gold_pickaxe_png_data, embed_gold_pickaxe_png_size},
+        {TOOL_IRON_PICKAXE, embed_iron_pickaxe_png_data, embed_iron_pickaxe_png_size},
     };
 
     for (const auto &tool : tools)

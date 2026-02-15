@@ -15,6 +15,7 @@
 #include "GameState.h"
 
 class Shader;
+class AudioEngine;
 
 extern const int SCREEN_WIDTH;
 extern const int SCREEN_HEIGHT;
@@ -78,6 +79,7 @@ extern Player* g_player;
 extern ChunkManager* g_chunkManager;
 extern WaterSimulator* g_waterSimulator;
 extern ParticleSystem* g_particleSystem;
+extern AudioEngine* g_audioEngine;
 
 extern std::unordered_map<uint8_t, GLuint> g_blockIcons;
 

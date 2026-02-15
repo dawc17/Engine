@@ -575,6 +575,26 @@ void Renderer::renderHeldItem(const FrameParams& fp, const Player& player)
         handModel = glm::translate(handModel,
             glm::vec3(-0.5f, -0.5f, -0.03125f));
 
+        constexpr float PI = 3.14159265f;
+
+        float swingT = player.isSwinging ? player.swingProgress : 0.0f;
+        float swingWave = std::sin(swingT * PI);
+
+        float placeT = player.isPlacing ? player.placeProgress : 0.0f;
+        float placeTri = 1.0f - std::abs(2.0f * placeT - 1.0f);
+        float placeEase = placeTri * placeTri * (3.0f - 2.0f * placeTri);
+
+        if (player.isSwinging)
+        {
+            handModel = glm::translate(handModel, glm::vec3(-0.08f * swingWave, -0.12f * swingWave, 0.06f * swingWave));
+            handModel = glm::rotate(handModel, glm::radians(-60.0f * swingWave), glm::vec3(0.0f, 0.0f, 1.0f));
+        }
+        if (player.isPlacing)
+        {
+            handModel = glm::translate(handModel, glm::vec3(0.05f * placeEase, -0.02f * placeEase, -0.13f * placeEase));
+            handModel = glm::rotate(handModel, glm::radians(18.0f * placeEase), glm::vec3(1.0f, 0.0f, 0.0f));
+        }
+            
         glm::mat4 handMVP = handProj * handModel;
         glUniformMatrix4fv(toolTransformLoc, 1, GL_FALSE,
             glm::value_ptr(handMVP));
@@ -605,14 +625,50 @@ void Renderer::renderHeldItem(const FrameParams& fp, const Player& player)
         glm::mat4 handProj = glm::perspective(
             glm::radians(70.0f), fp.aspect, 0.01f, 10.0f);
 
+        BlockTransform& bt = g_blockTransform;
         glm::mat4 handModel = glm::mat4(1.0f);
         handModel = glm::translate(handModel,
-            glm::vec3(0.4f, -0.36f, -0.7f));
+            glm::vec3(bt.posX, bt.posY, bt.posZ));
         handModel = glm::rotate(handModel,
-            glm::radians(35.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+            glm::radians(bt.rotZ), glm::vec3(0.0f, 0.0f, 1.0f));
         handModel = glm::rotate(handModel,
-            glm::radians(-20.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-        handModel = glm::scale(handModel, glm::vec3(0.16f));
+            glm::radians(bt.rotY), glm::vec3(0.0f, 1.0f, 0.0f));
+        handModel = glm::rotate(handModel,
+            glm::radians(bt.rotX), glm::vec3(1.0f, 0.0f, 0.0f));
+
+        constexpr float PI = 3.14159265f;
+
+        float swingT = player.isSwinging ? player.swingProgress : 0.0f;
+        float swingWave = std::sin(swingT * PI);
+
+        float placeT = player.isPlacing ? player.placeProgress : 0.0f;
+        float placeTri = 1.0f - std::abs(2.0f * placeT - 1.0f);
+        float placeEase = placeTri * placeTri * (3.0f - 2.0f * placeTri);
+
+        if (player.isSwinging)
+        {
+            handModel = glm::translate(handModel,
+                glm::vec3(g_blockSwingTuning.posX * swingWave,
+                          g_blockSwingTuning.posY * swingWave,
+                          g_blockSwingTuning.posZ * swingWave));
+            handModel = glm::rotate(handModel,
+                glm::radians(g_blockSwingTuning.rotX * swingWave), glm::vec3(1.0f, 0.0f, 0.0f));
+            handModel = glm::rotate(handModel,
+                glm::radians(g_blockSwingTuning.rotZ * swingWave), glm::vec3(0.0f, 0.0f, 1.0f));
+        }
+        if (player.isPlacing)
+        {
+            handModel = glm::translate(handModel,
+                glm::vec3(g_blockPlaceTuning.posX * placeEase,
+                          g_blockPlaceTuning.posY * placeEase,
+                          g_blockPlaceTuning.posZ * placeEase));
+            handModel = glm::rotate(handModel,
+                glm::radians(g_blockPlaceTuning.rotX * placeEase), glm::vec3(1.0f, 0.0f, 0.0f));
+            handModel = glm::rotate(handModel,
+                glm::radians(g_blockPlaceTuning.rotZ * placeEase), glm::vec3(0.0f, 0.0f, 1.0f));
+        }
+
+        handModel = glm::scale(handModel, glm::vec3(bt.scale));
         handModel = glm::translate(handModel,
             glm::vec3(-0.5f, -0.5f, -0.5f));
 

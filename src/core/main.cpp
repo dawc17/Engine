@@ -28,6 +28,7 @@
 #include "../gameplay/Player.h"
 #include "../gameplay/SurvivalSystem.h"
 #include "../gameplay/Inventory.h"
+#include "../audio/AudioEngine.h"
 
 #include "MainGlobals.h"
 #include "GameState.h"
@@ -126,8 +127,15 @@ int main(int argc, char* argv[])
     ParticleSystem particleSystem;
     particleSystem.init();
 
+    AudioEngine audioEngine;
+    if (!audioEngine.init())
+    {
+      std::cerr << "Audio init failed - continuing without sound." << std::endl;
+    }
+
     g_player = &player;
     g_particleSystem = &particleSystem;
+    g_audioEngine = &audioEngine;
 
     auto& chunkManager  = session.chunkManager;
     auto& jobSystem      = session.jobSystem;
@@ -251,6 +259,69 @@ int main(int argc, char* argv[])
           {
             processInput(window, player, deltaTime);
             player.update(deltaTime, *chunkManager);
+          }
+
+          static float footstepTimer = 0.0f;
+          footstepTimer -= deltaTime;
+          if (!player.isDead && player.onGround)
+          {
+            glm::vec2 horizontalVel(player.velocity.x, player.velocity.z);
+            float horizontalSpeed = glm::length(horizontalVel);
+
+            if (horizontalSpeed > 0.15f)
+            {
+              if (footstepTimer <= 0.0f)
+              {
+                int bx = static_cast<int>(std::floor(player.position.x));
+                int by = static_cast<int>(std::floor(player.position.y - 0.1f));
+                int bz = static_cast<int>(std::floor(player.position.z));
+
+                uint8_t below = getBlockAtWorld(bx, by, bz, *chunkManager);
+                if (g_audioEngine)
+                  g_audioEngine->playFootstep(below, player.position);
+
+                float t = glm::clamp(horizontalSpeed / 7.0f, 0.0f, 1.0f);
+                footstepTimer = glm::mix(0.46f, 0.24f, t);
+              }
+            }
+            else
+            {
+              footstepTimer = 0.0f;
+            }
+          }
+
+          const bool holdingMineButton =
+            glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
+          const bool loopMineSwing =
+            (player.gamemode == Gamemode::Survival) && player.isBreaking && holdingMineButton;
+
+          constexpr float SWING_DURATION = 0.22f;
+          if (loopMineSwing)
+          {
+            player.isSwinging = true;
+            player.swingProgress += deltaTime / SWING_DURATION;
+            if (player.swingProgress >= 1.0f)
+              player.swingProgress -= 1.0f;
+          }
+          else if (player.isSwinging)
+          {
+            player.swingProgress += deltaTime / SWING_DURATION;
+            if (player.swingProgress >= 1.0f)
+            {
+              player.swingProgress = 0.0f;
+              player.isSwinging = false;
+            }
+          }
+
+          constexpr float PLACE_DURATION = 0.20f;
+          if (player.isPlacing)
+          {
+            player.placeProgress += deltaTime / PLACE_DURATION;
+            if (player.placeProgress >= 1.0f)
+            {
+              player.placeProgress = 0.0f;
+              player.isPlacing = false;
+            }
           }
 
           if (autoTimeProgression)
@@ -379,6 +450,11 @@ int main(int argc, char* argv[])
         fp.ambientLight = ambientLight;
         fp.effectiveFogDensity = effectiveFogDensity;
         fp.gameTime = static_cast<float>(glfwGetTime());
+
+        audioEngine.update(deltaTime);
+        audioEngine.updateListener(eyePos, camForward, glm::vec3(0.0f, 1.0f, 0.0f));
+        audioEngine.setUnderwaterLoop(isUnderwater);
+        audioEngine.setWindLoop(!isUnderwater && currentState == GameState::Playing);
 
         renderer.beginFrame(fp);
 
@@ -569,6 +645,9 @@ int main(int argc, char* argv[])
                   setBlockAtWorld(hit->blockPos.x, hit->blockPos.y, hit->blockPos.z, 0, *chunkManager);
                   player.inventory.addItem(player.breakingBlockId, 1);
 
+                  if (g_audioEngine)
+                    g_audioEngine->playBlockBreak(player.breakingBlockId, glm::vec3(hit->blockPos) + glm::vec3(0.5f));
+
                   if (g_waterSimulator)
                     g_waterSimulator->onBlockChanged(hit->blockPos.x, hit->blockPos.y, hit->blockPos.z, player.breakingBlockId, 0);
 
@@ -714,6 +793,9 @@ int main(int argc, char* argv[])
     }
 
     session.shutdown(player, window);
+
+    audioEngine.shutdown();
+    g_audioEngine = nullptr;
 
     renderer.cleanup();
 
