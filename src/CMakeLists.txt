@@ -30,6 +30,7 @@ set(SOURCES
     core/Renderer.cpp
     rendering/Frustum.cpp
     audio/AudioEngine.cpp
+    audio/stb_vorbis_impl.c
 )
 
 include(${CMAKE_SOURCE_DIR}/cmake/embed_resources.cmake)

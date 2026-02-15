@@ -3,8 +3,10 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstring>
 #include <filesystem>
 #include <iostream>
+#include <memory>
 #include <random>
 #include <string>
 #include <unordered_map>
@@ -52,6 +54,9 @@ namespace
     }
 }
 
+#define STB_VORBIS_HEADER_ONLY
+#include "../thirdparty/stb_vorbis.c"
+
 #define MINIAUDIO_IMPLEMENTATION
 #include "../thirdparty/miniaudio.h"
 
@@ -68,8 +73,12 @@ struct AudioEngine::Impl
 
     struct ActiveOneShot
     {
-        ma_sound sound{};
+        std::unique_ptr<ma_sound> sound;
         bool initialized = false;
+
+        ActiveOneShot() : sound(std::make_unique<ma_sound>()), initialized(false) {
+            std::memset(sound.get(), 0, sizeof(ma_sound));
+        }
     };
     std::vector<ActiveOneShot> activeOneShots;
 
@@ -101,8 +110,8 @@ struct AudioEngine::Impl
             const std::string& path = list[(startIndex + attempt) % list.size()];
             const std::string resolved = resolveAudioPath(path);
 
-            ActiveOneShot oneShot{};
-            ma_result result = ma_sound_init_from_file(&engine, resolved.c_str(), 0, nullptr, nullptr, &oneShot.sound);
+            ActiveOneShot oneShot;
+            ma_result result = ma_sound_init_from_file(&engine, resolved.c_str(), 0, nullptr, nullptr, oneShot.sound.get());
             if (result != MA_SUCCESS)
             {
                 if (loggedLoadFailures.insert(path).second)
@@ -115,15 +124,15 @@ struct AudioEngine::Impl
 
             oneShot.initialized = true;
 
-            ma_sound_set_spatialization_enabled(&oneShot.sound, MA_TRUE);
-            ma_sound_set_position(&oneShot.sound, worldPos.x, worldPos.y, worldPos.z);
-            ma_sound_set_volume(&oneShot.sound, volume);
-            ma_sound_set_pitch(&oneShot.sound, pitchRand(rng));
-            ma_sound_set_rolloff(&oneShot.sound, 1.0f);
-            ma_sound_set_min_distance(&oneShot.sound, 1.5f);
-            ma_sound_set_max_distance(&oneShot.sound, 28.0f);
+            ma_sound_set_spatialization_enabled(oneShot.sound.get(), MA_TRUE);
+            ma_sound_set_position(oneShot.sound.get(), worldPos.x, worldPos.y, worldPos.z);
+            ma_sound_set_volume(oneShot.sound.get(), volume);
+            ma_sound_set_pitch(oneShot.sound.get(), pitchRand(rng));
+            ma_sound_set_rolloff(oneShot.sound.get(), 1.0f);
+            ma_sound_set_min_distance(oneShot.sound.get(), 1.5f);
+            ma_sound_set_max_distance(oneShot.sound.get(), 28.0f);
 
-            ma_sound_start(&oneShot.sound);
+            ma_sound_start(oneShot.sound.get());
             activeOneShots.push_back(std::move(oneShot));
             return true;
         }
@@ -307,7 +316,7 @@ void AudioEngine::shutdown()
     for (auto& oneShot : impl->activeOneShots)
     {
         if (oneShot.initialized)
-            ma_sound_uninit(&oneShot.sound);
+            ma_sound_uninit(oneShot.sound.get());
     }
     impl->activeOneShots.clear();
 
@@ -334,9 +343,9 @@ void AudioEngine::update(float dt)
 
     for (size_t i = 0; i < impl->activeOneShots.size();)
     {
-        if (impl->activeOneShots[i].initialized && ma_sound_at_end(&impl->activeOneShots[i].sound))
+        if (impl->activeOneShots[i].initialized && ma_sound_at_end(impl->activeOneShots[i].sound.get()))
         {
-            ma_sound_uninit(&impl->activeOneShots[i].sound);
+            ma_sound_uninit(impl->activeOneShots[i].sound.get());
             impl->activeOneShots.erase(impl->activeOneShots.begin() + static_cast<long long>(i));
             continue;
         }
