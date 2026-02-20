@@ -1,4 +1,5 @@
 #include "BlockTypes.h"
+#include "../rendering/ToolModelGenerator.h"
 
 std::array<BlockType, 256> g_blockTypes;
 std::array<BlockType, 256> g_defaultBlockTypes;
@@ -208,5 +209,34 @@ float getBlockHardness(uint8_t blockId)
         case 21: return 0.2f;
         case 22: return 2.0f;
         default: return 1.0f;
+    }
+}
+
+ToolType getBlockPreferredTool(uint8_t blockId)
+{
+    switch (blockId)
+    {
+        case 3: //stone
+        case 22: //cobblestone
+            return ToolType::Pickaxe;
+        default:
+            return ToolType::None;
+    }
+}
+
+float getToolSpeedMultiplier(uint8_t toolItemId, uint8_t blockId)
+{
+    ToolType preferred = getBlockPreferredTool(blockId);
+    if (preferred == ToolType::None)
+        return 1.0f;
+
+    switch (toolItemId) 
+    {
+        case TOOL_WOOD_PICKAXE:     return 1.0f;
+        case TOOL_STONE_PICKAXE:    return 1.5f;
+        case TOOL_IRON_PICKAXE:     return 1.9f;
+        case TOOL_GOLD_PICKAXE:     return 2.2f;
+        case TOOL_DIAMOND_PICKAXE:  return 3.0f;
+        default: return 0.3f;
     }
 }

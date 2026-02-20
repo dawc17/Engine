@@ -1,3 +1,4 @@
+#include <cstdint>
 #ifdef _WIN32
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
@@ -678,7 +679,9 @@ int main(int argc, char* argv[])
               else
               {
                 float hardness = getBlockHardness(player.breakingBlockId);
-                player.breakProgress += deltaTime / hardness;
+                uint8_t heldId = player.inventory.selectedItem().blockId;
+                float speedMult = getToolSpeedMultiplier(heldId, player.breakingBlockId);
+                player.breakProgress += (deltaTime / hardness) * speedMult;
                 if (player.breakProgress >= 1.0f)
                 {
                   setBlockAtWorld(hit->blockPos.x, hit->blockPos.y, hit->blockPos.z, 0, *chunkManager);
